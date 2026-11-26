@@ -31,3 +31,9 @@ flutter run
 ```
 
 > **Note:** Configure your own `android/app/google-services.json` and Firebase project before running in your environment. Never commit private Firebase Admin SDK keys or release keystores.
+
+## Android APK Download
+
+- **Release Page:** https://github.com/Domaduios/talend-x/releases/tag/v1.0.0
+- **Direct APK:** https://github.com/Domaduios/talend-x/releases/download/v1.0.0/talend-x-v1.0.0.apk
+
