@@ -1,0 +1,335 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Authenticated users can read any user's data (for search and browsing)
+      allow read: if isAuthenticated();
+      // Users can create their own document (when signing up)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      // Users can update their own data, admins can update any user
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Only admins can delete users
+      allow delete: if isAdmin();
+      
+      // Payment Methods subcollection
+      match /paymentMethods/{paymentMethodId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow create: if isAuthenticated() && request.auth.uid == userId;
+        allow update: if isAuthenticated() && request.auth.uid == userId;
+        allow delete: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+    
+    // Sessions collection
+    match /sessions/{sessionId} {
+      // Users can read sessions they are involved in (as teacher or learner)
+      // Note: For queries with where('teacherId'/'learnerId'/'participants'), 
+      // Firestore will automatically check that all results match this rule.
+      // Queries with arrayContains('participants', userId) are validated by Firestore
+      allow read: if isAuthenticated() && (
+        resource.data.teacherId == request.auth.uid ||
+        resource.data.learnerId == request.auth.uid ||
+        resource.data.creatorId == request.auth.uid ||
+        resource.data.partnerId == request.auth.uid ||
+        isAdmin()
+      );
+      // Authenticated users can create sessions
+      allow create: if isAuthenticated();
+      // Users can update sessions they are involved in
+      allow update: if isAuthenticated() && (
+        resource.data.teacherId == request.auth.uid ||
+        resource.data.learnerId == request.auth.uid ||
+        resource.data.creatorId == request.auth.uid ||
+        isAdmin()
+      );
+      // Users can delete sessions they created, admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.teacherId == request.auth.uid ||
+        resource.data.creatorId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+    
+    // Messages collection
+    match /messages/{messageId} {
+      // Users can read messages they sent or received
+      // Queries with where('senderId'/'receiverId') will automatically be validated
+      allow read: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      // Authenticated users can create messages
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      // Sender or receiver can update (e.g., mark as read)
+      allow update: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      // Users can delete messages they sent OR received (for clear chat functionality)
+      allow delete: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      // Support both userId and receiverId patterns
+      // Queries with where('userId'/'receiverId') will be automatically validated
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      // System can create notifications (using service account), users can create for themselves
+      allow create: if isAuthenticated();
+      // Users can update their own notifications (e.g., mark as read)
+      // Support both read and isRead fields
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+    
+    // Connections collection
+    match /connections/{connectionId} {
+      // Users can read connections they are involved in
+      // Support both requesterId/receiverId and userId/connectedUserId patterns
+      // Queries with where clauses will be automatically validated
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.connectedUserId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        resource.data.targetUserId == request.auth.uid ||
+        isAdmin()
+      );
+      // Authenticated users can create connections
+      allow create: if isAuthenticated();
+      // Users can update connections they are involved in
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.connectedUserId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        resource.data.targetUserId == request.auth.uid ||
+        isAdmin()
+      );
+      // Users can delete connections they created
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.requesterId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+    
+    // Reviews collection
+    match /reviews/{reviewId} {
+      // Users can read all reviews (for viewing user profiles)
+      allow read: if isAuthenticated();
+      // Authenticated users can create reviews
+      allow create: if isAuthenticated();
+      // Only the reviewer can update their review
+      allow update: if isAuthenticated() && resource.data.reviewerId == request.auth.uid;
+      // Only the reviewer can delete their review
+      allow delete: if isAuthenticated() && (
+        resource.data.reviewerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+    
+    // Favorites collection
+    match /favorites/{favoriteId} {
+      // Users can read their own favorites
+      // Queries with where('userId') will be automatically validated
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Authenticated users can create favorites
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update their own favorites
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users can delete their own favorites
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Blocked Users collection
+    match /blocked_users/{blockedId} {
+      // Users can read their own blocked users list
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Authenticated users can block other users
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update their own blocked list
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users can unblock (delete from blocked list)
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Allow batch operations for messages (needed for clear chat)
+    // Note: Individual message rules above will still apply
+    
+    // Reports collection
+    match /reports/{reportId} {
+      // Users can read their own reports, admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.reporterId == request.auth.uid ||
+        isAdmin()
+      );
+      // Authenticated users can create reports
+      allow create: if isAuthenticated();
+      // Only admins can update reports (e.g., change status)
+      allow update: if isAdmin();
+      // Only admins can delete reports
+      allow delete: if isAdmin();
+    }
+    
+    // Resources collection
+    match /resources/{resourceId} {
+      // All authenticated users can read resources
+      allow read: if isAuthenticated();
+      // Only admins can create resources
+      allow create: if isAdmin();
+      // Only admins can update resources
+      allow update: if isAdmin();
+      // Only admins can delete resources
+      allow delete: if isAdmin();
+    }
+    
+    // Wallets collection
+    match /wallets/{walletId} {
+      // Users can read their own wallet
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users can create their own wallet
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update their own wallet
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users cannot delete wallets
+      allow delete: if false;
+      
+      // Transactions subcollection
+      match /transactions/{transactionId} {
+        allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update: if false; // Transactions are immutable
+        allow delete: if false; // Transactions cannot be deleted
+      }
+    }
+    
+    // Referrals collection
+    match /referrals/{referralId} {
+      // Users can read their own referrals
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Authenticated users can create referrals
+      allow create: if isAuthenticated();
+      // Users can update their own referrals
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Users cannot delete referrals
+      allow delete: if false;
+    }
+    
+    // Communities collection
+    match /communities/{communityId} {
+      // All authenticated users can read communities
+      allow read: if isAuthenticated();
+      // Authenticated users can create communities
+      allow create: if isAuthenticated();
+      // Community creators and admins can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      // Community creators and admins can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Community Members subcollection
+      match /community_members/{memberId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() && (
+          resource.data.userId == request.auth.uid ||
+          isAdmin()
+        );
+        allow delete: if isAuthenticated() && (
+          resource.data.userId == request.auth.uid ||
+          isAdmin()
+        );
+      }
+      
+      // Community Posts subcollection
+      match /community_posts/{postId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid ||
+          isAdmin()
+        );
+        allow delete: if isAuthenticated() && (
+          resource.data.authorId == request.auth.uid ||
+          isAdmin()
+        );
+      }
+    }
+    
+    // Faculties collection (read-only for users)
+    match /faculties/{facultyId} {
+      // Anyone can read faculties
+      allow read: if true;
+      // Only admins can modify (using service account)
+      allow write: if isAdmin();
+    }
+    
+    // Talents collection (legacy - if still used)
+    match /talents/{talentId} {
+      // Anyone can read talents
+      allow read: if true;
+      // Only authenticated users can create talents
+      allow create: if isAuthenticated();
+      // Only the owner can update their talent
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Only the owner can delete their talent
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Applications collection (legacy - if still used)
+    match /applications/{applicationId} {
+      // Users can read their own applications
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.talentOwnerId == request.auth.uid
+      );
+      // Authenticated users can create applications
+      allow create: if isAuthenticated();
+      // Only the applicant or talent owner can update
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.talentOwnerId == request.auth.uid
+      );
+      // Only the applicant can delete their application
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

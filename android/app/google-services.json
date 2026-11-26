@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "380802503994",
+    "project_id": "talendx-12808",
+    "storage_bucket": "talendx-12808.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:380802503994:android:73f7b36b69a03207f96c03",
+        "android_client_info": {
+          "package_name": "com.iu.talendx"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3YG7jpXZbhIwsEVEyWlPIalFVBIpSZ8M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
