@@ -1,16 +1,33 @@
-# taland
+﻿# TalentX (Talend X) — Student Skill Exchange Mobile App
 
-A new Flutter project.
+A **Flutter Android mobile application** backed by **Firebase Authentication** and **Cloud Firestore** for peer-to-peer student skill exchange, real-time chat, calendar scheduling, and community discovery.
 
-## Getting Started
+## Mobile Screenshots (Android Emulator — API 37)
 
-This project is a starting point for a Flutter application.
+| Welcome | Onboarding | Sign In | Sign Up |
+|---|---|---|---|
+| ![Welcome](docs/screenshots/01-welcome.png) | ![Onboarding](docs/screenshots/02-onboarding.png) | ![Sign In](docs/screenshots/03-signin.png) | ![Sign Up](docs/screenshots/04-signup.png) |
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- **Authentication & Onboarding:** Email/password Sign In & Sign Up, Google & Facebook sign-in integration, email verification, and multi-step onboarding.
+- **Skill Exchange & Discovery:** Browse peers, filter by faculty/skills, search, favorites, and match details.
+- **Real-Time Chat & Calls:** Individual chat, chat list, notifications, and video call screen.
+- **Multi-Language RTL/LTR Support:** Dynamic locale switching with RTL layout support.
+- **Scheduling, Wallet & Admin:** Calendar scheduling, learning progress, teaching dashboard, wallet/withdrawal screens, and admin dashboard.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Tech Stack
+
+- **Mobile Framework:** Flutter (`^3.9.0` Dart SDK)
+- **Backend & Auth:** Firebase Core, Firebase Auth, Cloud Firestore, Google Sign-In
+- **State & Localization:** Provider, `flutter_localizations`, `shared_preferences`
+
+## Local Android Setup
+
+```bash
+flutter pub get
+flutter build apk --release
+flutter run
+```
+
+> **Note:** Configure your own `android/app/google-services.json` and Firebase project before running in your environment. Never commit private Firebase Admin SDK keys or release keystores.
