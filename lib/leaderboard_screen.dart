@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
 
@@ -86,7 +88,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       }
 
       // Get all users with completed sessions
-      final usersSnapshot = await FirebaseFirestore.instance
+      final usersSnapshot = await SupabaseDb.instance
           .collection('users')
           .where('profileCompleted', isEqualTo: true)
           .limit(50)
@@ -99,7 +101,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         final userId = userDoc.id;
 
         // Get completed teaching sessions
-        Query query = FirebaseFirestore.instance
+        Query query = SupabaseDb.instance
             .collection('sessions')
             .where('teacherId', isEqualTo: userId)
             .where('status', isEqualTo: 'completed');
@@ -107,7 +109,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         if (startDate != null) {
           query = query.where(
             'completedAt',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
+            isGreaterThanOrEqualTo: startDate.toUtc().toIso8601String(),
           );
         }
 
@@ -117,7 +119,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         if (sessionsCount == 0) continue;
 
         // Get average rating
-        final reviewsSnapshot = await FirebaseFirestore.instance
+        final reviewsSnapshot = await SupabaseDb.instance
             .collection('reviews')
             .where('revieweeId', isEqualTo: userId)
             .get();

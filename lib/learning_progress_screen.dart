@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class LearningProgressScreen extends StatefulWidget {
@@ -57,10 +58,10 @@ class _LearningProgressScreenState extends State<LearningProgressScreen>
 
   Future<void> _loadLearningProgress() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -79,7 +80,7 @@ class _LearningProgressScreenState extends State<LearningProgressScreen>
 
       for (var skill in learningSkills) {
         // Get sessions for this skill
-        final sessionsSnapshot = await FirebaseFirestore.instance
+        final sessionsSnapshot = await SupabaseDb.instance
             .collection('sessions')
             .where('participants', arrayContains: currentUser.uid)
             .where('skills', arrayContains: skill)
@@ -107,7 +108,7 @@ class _LearningProgressScreenState extends State<LearningProgressScreen>
               orElse: () => '',
             );
             if (teacherId.isNotEmpty && teacherName == null) {
-              final teacherDoc = await FirebaseFirestore.instance
+              final teacherDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(teacherId)
                   .get();

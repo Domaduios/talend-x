@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
@@ -69,9 +71,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       setState(() => _isLoading = true);
 
       try {
-        await FirebaseAuth.instance.sendPasswordResetEmail(
-          email: _emailController.text.trim(),
-        );
+        await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim());
 
         if (mounted) {
           setState(() {
@@ -81,7 +81,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           _successController.forward();
           _showSuccessSnackBar('تم إرسال رابط إعادة تعيين كلمة المرور بنجاح!');
         }
-      } on FirebaseAuthException catch (e) {
+      } on AuthException catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء إرسال الرابط';
@@ -113,9 +113,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     });
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
+      await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim());
 
       if (mounted) {
         setState(() => _isLoading = false);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class ReviewsScreen extends StatefulWidget {
@@ -74,7 +75,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
   }
 
   Future<void> _loadReviews() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -84,7 +85,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
 
     try {
       // Load received reviews (reviews about current user)
-      final receivedSnapshot = await FirebaseFirestore.instance
+      final receivedSnapshot = await SupabaseDb.instance
           .collection('reviews')
           .where('revieweeId', isEqualTo: currentUser.uid)
           .orderBy('createdAt', descending: true)
@@ -107,7 +108,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
         String reviewerNameFinal = reviewerName ?? 'Unknown';
         if (reviewerId != null && reviewerName == null) {
           try {
-            final reviewerDoc = await FirebaseFirestore.instance
+            final reviewerDoc = await SupabaseDb.instance
                 .collection('users')
                 .doc(reviewerId)
                 .get();
@@ -133,7 +134,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
         else
           oneStars++;
 
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         received.add({
           'id': doc.id,
           'reviewerName': reviewerNameFinal,
@@ -147,7 +148,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
       }
 
       // Load given reviews (reviews by current user)
-      final givenSnapshot = await FirebaseFirestore.instance
+      final givenSnapshot = await SupabaseDb.instance
           .collection('reviews')
           .where('reviewerId', isEqualTo: currentUser.uid)
           .orderBy('createdAt', descending: true)
@@ -164,7 +165,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
         String revieweeNameFinal = revieweeName ?? 'Unknown';
         if (revieweeId != null && revieweeName == null) {
           try {
-            final revieweeDoc = await FirebaseFirestore.instance
+            final revieweeDoc = await SupabaseDb.instance
                 .collection('users')
                 .doc(revieweeId)
                 .get();
@@ -176,7 +177,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
           }
         }
 
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         given.add({
           'id': doc.id,
           'revieweeName': revieweeNameFinal,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
 import 'individual_chat_screen.dart';
@@ -66,10 +67,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _loadConnections() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final connectionsSnapshot = await FirebaseFirestore.instance
+      final connectionsSnapshot = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: currentUser.uid)
           .where('status', isEqualTo: 'accepted')
@@ -82,7 +83,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
         final connectedUserId = data['connectedUserId'] as String?;
 
         if (connectedUserId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(connectedUserId)
               .get();
@@ -91,10 +92,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
             final userData = userDoc.data();
             if (userData == null) continue;
 
-            final createdAt = data['createdAt'] as Timestamp?;
+            final createdAt = parseDbDate(data['createdAt']);
 
             // Get sessions count and rating
-            final sessionsSnapshot = await FirebaseFirestore.instance
+            final sessionsSnapshot = await SupabaseDb.instance
                 .collection('sessions')
                 .where('participants', arrayContains: connectedUserId)
                 .where('status', isEqualTo: 'completed')
@@ -145,10 +146,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _loadPendingRequests() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final requestsSnapshot = await FirebaseFirestore.instance
+      final requestsSnapshot = await SupabaseDb.instance
           .collection('connections')
           .where('connectedUserId', isEqualTo: currentUser.uid)
           .where('status', isEqualTo: 'pending')
@@ -161,7 +162,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
         final userId = data['userId'] as String?;
 
         if (userId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(userId)
               .get();
@@ -170,10 +171,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
             final userData = userDoc.data();
             if (userData == null) continue;
 
-            final requestedAt = data['createdAt'] as Timestamp?;
+            final requestedAt = parseDbDate(data['createdAt']);
 
             // Calculate match percentage
-            final currentUserDoc = await FirebaseFirestore.instance
+            final currentUserDoc = await SupabaseDb.instance
                 .collection('users')
                 .doc(currentUser.uid)
                 .get();
@@ -184,7 +185,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
             );
 
             // Get rating
-            final sessionsSnapshot = await FirebaseFirestore.instance
+            final sessionsSnapshot = await SupabaseDb.instance
                 .collection('sessions')
                 .where('participants', arrayContains: userId)
                 .where('status', isEqualTo: 'completed')
@@ -229,10 +230,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _loadSuggestions() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -256,7 +257,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
       }
 
       // Get users who teach skills the current user wants to learn
-      final suggestionsSnapshot = await FirebaseFirestore.instance
+      final suggestionsSnapshot = await SupabaseDb.instance
           .collection('users')
           .where('profileCompleted', isEqualTo: true)
           .where('teachingSkills', arrayContainsAny: learningSkills)
@@ -282,7 +283,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
         final mutualConnections = await _countMutualConnections(doc.id);
 
         // Get rating
-        final sessionsSnapshot = await FirebaseFirestore.instance
+        final sessionsSnapshot = await SupabaseDb.instance
             .collection('sessions')
             .where('participants', arrayContains: doc.id)
             .where('status', isEqualTo: 'completed')
@@ -342,16 +343,16 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<int> _countMutualConnections(String userId) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return 0;
 
-      final currentUserConnections = await FirebaseFirestore.instance
+      final currentUserConnections = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: currentUser.uid)
           .where('status', isEqualTo: 'accepted')
           .get();
 
-      final otherUserConnections = await FirebaseFirestore.instance
+      final otherUserConnections = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: userId)
           .where('status', isEqualTo: 'accepted')
@@ -379,10 +380,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _acceptRequest(String userId) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final requestDoc = await FirebaseFirestore.instance
+      final requestDoc = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: userId)
           .where('connectedUserId', isEqualTo: currentUser.uid)
@@ -391,12 +392,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
           .get();
 
       if (requestDoc.docs.isNotEmpty) {
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('connections')
             .doc(requestDoc.docs.first.id)
             .update({
               'status': 'accepted',
-              'acceptedAt': FieldValue.serverTimestamp(),
+              'acceptedAt': DbFieldValue.serverTimestamp(),
             });
       }
 
@@ -429,10 +430,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _rejectRequest(String userId) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final requestDoc = await FirebaseFirestore.instance
+      final requestDoc = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: userId)
           .where('connectedUserId', isEqualTo: currentUser.uid)
@@ -441,7 +442,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
           .get();
 
       if (requestDoc.docs.isNotEmpty) {
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('connections')
             .doc(requestDoc.docs.first.id)
             .delete();
@@ -475,10 +476,10 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _removeConnection(String userId) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final connectionDoc = await FirebaseFirestore.instance
+      final connectionDoc = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: currentUser.uid)
           .where('connectedUserId', isEqualTo: userId)
@@ -487,7 +488,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
           .get();
 
       if (connectionDoc.docs.isNotEmpty) {
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('connections')
             .doc(connectionDoc.docs.first.id)
             .delete();
@@ -521,11 +522,11 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
 
   Future<void> _sendConnectionRequest(String userId) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       // Check if request already exists
-      final existingRequest = await FirebaseFirestore.instance
+      final existingRequest = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: currentUser.uid)
           .where('connectedUserId', isEqualTo: userId)
@@ -538,32 +539,32 @@ class _ConnectionsScreenState extends State<ConnectionsScreen>
       }
 
       // Create connection request
-      await FirebaseFirestore.instance.collection('connections').add({
+      await SupabaseDb.instance.collection('connections').add({
         'userId': currentUser.uid,
         'connectedUserId': userId,
         'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DbFieldValue.serverTimestamp(),
       });
 
       // Get current user's name for notification
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
       final currentUserName =
           currentUserDoc.data()?['name'] ??
-          currentUser.displayName ??
+          currentUser.userMetadata?['name'] as String? ??
           'Someone';
 
       // Create notification for the other user
-      await FirebaseFirestore.instance.collection('notifications').add({
+      await SupabaseDb.instance.collection('notifications').add({
         'userId': userId,
         'type': 'connection',
         'title': 'New Connection Request',
         'message': '$currentUserName wants to connect with you',
         'fromUserId': currentUser.uid,
         'isRead': false,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': DbFieldValue.serverTimestamp(),
       });
 
       await _loadSuggestions();

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'profile_setup_screen.dart';
 
 class EmailVerificationPendingScreen extends StatefulWidget {
@@ -116,18 +117,18 @@ class _EmailVerificationPendingScreenState
     }
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = SupabaseService.currentUser;
       if (user != null) {
         // Reload user to get latest email verification status
-        await user.reload();
-        final updatedUser = FirebaseAuth.instance.currentUser;
+        await SupabaseService.auth.refreshSession();
+        final updatedUser = SupabaseService.currentUser;
 
         if (mounted) {
           if (!silent) {
             setState(() => _isCheckingVerification = false);
           }
 
-          if (updatedUser?.emailVerified == true) {
+          if (updatedUser?.emailConfirmedAt != null) {
             _checkTimer?.cancel();
 
             // Save user data to Firestore after email verification
@@ -136,7 +137,7 @@ class _EmailVerificationPendingScreenState
               final isAdminEmail =
                   widget.email.toLowerCase() == 'domaduios@gmail.com';
 
-              await FirebaseFirestore.instance
+              await SupabaseDb.instance
                   .collection('users')
                   .doc(updatedUser!.uid)
                   .set({
@@ -148,8 +149,8 @@ class _EmailVerificationPendingScreenState
                         false, // User needs to complete profile setup
                     'isAdmin': isAdminEmail,
                     'role': isAdminEmail ? 'admin' : 'user',
-                    'createdAt': FieldValue.serverTimestamp(),
-                    'updatedAt': FieldValue.serverTimestamp(),
+                    'createdAt': DbFieldValue.serverTimestamp(),
+                    'updatedAt': DbFieldValue.serverTimestamp(),
                   });
             } catch (e) {
               if (mounted && !silent) {
@@ -201,9 +202,9 @@ class _EmailVerificationPendingScreenState
     setState(() => _isResending = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null && !user.emailVerified) {
-        await user.sendEmailVerification();
+      final user = SupabaseService.currentUser;
+      if (user != null && user.emailConfirmedAt == null) {
+        await SupabaseService.auth.resend(type: OtpType.signup, email: widget.email);
 
         if (mounted) {
           setState(() => _isResending = false);

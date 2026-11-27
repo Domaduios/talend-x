@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -63,21 +65,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> with Ticker
       setState(() => _isLoading = true);
 
       try {
-        final user = FirebaseAuth.instance.currentUser;
+        final user = SupabaseService.currentUser;
         if (user == null) {
           throw Exception('User not logged in');
         }
 
         // Re-authenticate user with current password
-        final credential = EmailAuthProvider.credential(
-          email: user.email!,
-          password: _currentPasswordController.text,
-        );
-
-        await user.reauthenticateWithCredential(credential);
-
-        // Update password
-        await user.updatePassword(_newPasswordController.text);
+        await SupabaseService.auth.signInWithPassword(email: user.email!, password: _currentPasswordController.text);
+        await SupabaseService.auth.updateUser(UserAttributes(password: _newPasswordController.text));
 
         if (mounted) {
           setState(() => _isLoading = false);
@@ -98,7 +93,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> with Ticker
           );
           Navigator.pop(context);
         }
-      } on FirebaseAuthException catch (e) {
+      } on AuthException catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'Failed to change password';

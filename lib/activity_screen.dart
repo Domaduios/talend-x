@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class ActivityScreen extends StatefulWidget {
@@ -56,13 +57,13 @@ class _ActivityScreenState extends State<ActivityScreen>
 
   Future<void> _loadActivities() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       final List<Map<String, dynamic>> activities = [];
 
       // Load completed sessions
-      final sessionsSnapshot = await FirebaseFirestore.instance
+      final sessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .where('participants', arrayContains: currentUser.uid)
           .where('status', isEqualTo: 'completed')
@@ -72,7 +73,7 @@ class _ActivityScreenState extends State<ActivityScreen>
 
       for (var doc in sessionsSnapshot.docs) {
         final data = doc.data();
-        final completedAt = data['completedAt'] as Timestamp?;
+        final completedAt = parseDbDate(data['completedAt']);
         final participants = List<String>.from(data['participants'] ?? []);
         final otherUserId = participants.firstWhere(
           (id) => id != currentUser.uid,
@@ -80,7 +81,7 @@ class _ActivityScreenState extends State<ActivityScreen>
         );
 
         if (otherUserId.isNotEmpty) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(otherUserId)
               .get();
@@ -103,7 +104,7 @@ class _ActivityScreenState extends State<ActivityScreen>
       }
 
       // Load connection acceptances
-      final connectionsSnapshot = await FirebaseFirestore.instance
+      final connectionsSnapshot = await SupabaseDb.instance
           .collection('connections')
           .where('connectedUserId', isEqualTo: currentUser.uid)
           .where('status', isEqualTo: 'accepted')
@@ -113,11 +114,11 @@ class _ActivityScreenState extends State<ActivityScreen>
 
       for (var doc in connectionsSnapshot.docs) {
         final data = doc.data();
-        final acceptedAt = data['acceptedAt'] as Timestamp?;
+        final acceptedAt = parseDbDate(data['acceptedAt']);
         final userId = data['userId'] as String?;
 
         if (userId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(userId)
               .get();
@@ -136,7 +137,7 @@ class _ActivityScreenState extends State<ActivityScreen>
       }
 
       // Load reviews received
-      final reviewsSnapshot = await FirebaseFirestore.instance
+      final reviewsSnapshot = await SupabaseDb.instance
           .collection('reviews')
           .where('revieweeId', isEqualTo: currentUser.uid)
           .orderBy('createdAt', descending: true)
@@ -145,12 +146,12 @@ class _ActivityScreenState extends State<ActivityScreen>
 
       for (var doc in reviewsSnapshot.docs) {
         final data = doc.data();
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         final reviewerId = data['reviewerId'] as String?;
         final rating = (data['rating'] as num?)?.toDouble() ?? 0.0;
 
         if (reviewerId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(reviewerId)
               .get();
@@ -170,7 +171,7 @@ class _ActivityScreenState extends State<ActivityScreen>
       }
 
       // Load scheduled sessions
-      final upcomingSessionsSnapshot = await FirebaseFirestore.instance
+      final upcomingSessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .where('participants', arrayContains: currentUser.uid)
           .where('status', isEqualTo: 'scheduled')
@@ -180,7 +181,7 @@ class _ActivityScreenState extends State<ActivityScreen>
 
       for (var doc in upcomingSessionsSnapshot.docs) {
         final data = doc.data();
-        final scheduledDate = data['scheduledDate'] as Timestamp?;
+        final scheduledDate = parseDbDate(data['scheduledDate']);
         final participants = List<String>.from(data['participants'] ?? []);
         final otherUserId = participants.firstWhere(
           (id) => id != currentUser.uid,
@@ -188,7 +189,7 @@ class _ActivityScreenState extends State<ActivityScreen>
         );
 
         if (otherUserId.isNotEmpty) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(otherUserId)
               .get();

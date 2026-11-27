@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class CommunityScreen extends StatefulWidget {
@@ -56,10 +57,10 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Future<void> _loadCommunities() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await SupabaseDb.instance
           .collection('communities')
           .orderBy('createdAt', descending: true)
           .limit(20)
@@ -71,13 +72,13 @@ class _CommunityScreenState extends State<CommunityScreen>
         final data = doc.data();
 
         // Get member count
-        final membersSnapshot = await FirebaseFirestore.instance
+        final membersSnapshot = await SupabaseDb.instance
             .collection('community_members')
             .where('communityId', isEqualTo: doc.id)
             .get();
 
         // Get posts count
-        final postsSnapshot = await FirebaseFirestore.instance
+        final postsSnapshot = await SupabaseDb.instance
             .collection('community_posts')
             .where('communityId', isEqualTo: doc.id)
             .get();

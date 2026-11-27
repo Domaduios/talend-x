@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class BlockedUsersScreen extends StatefulWidget {
@@ -56,10 +57,10 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen>
 
   Future<void> _loadBlockedUsers() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final blockedSnapshot = await FirebaseFirestore.instance
+      final blockedSnapshot = await SupabaseDb.instance
           .collection('blocked_users')
           .where('blockedBy', isEqualTo: currentUser.uid)
           .orderBy('blockedAt', descending: true)
@@ -72,7 +73,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen>
         final blockedUserId = data['blockedUserId'] as String?;
 
         if (blockedUserId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(blockedUserId)
               .get();
@@ -80,7 +81,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen>
           if (userDoc.exists) {
             final userData = userDoc.data();
             if (userData != null) {
-              final blockedAt = data['blockedAt'] as Timestamp?;
+              final blockedAt = parseDbDate(data['blockedAt']);
 
               blocked.add({
                 'id': blockedUserId,
@@ -129,10 +130,10 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen>
               Navigator.pop(context);
 
               try {
-                final currentUser = FirebaseAuth.instance.currentUser;
+                final currentUser = SupabaseService.currentUser;
                 if (currentUser == null) return;
 
-                await FirebaseFirestore.instance
+                await SupabaseDb.instance
                     .collection('blocked_users')
                     .where('blockedBy', isEqualTo: currentUser.uid)
                     .where('blockedUserId', isEqualTo: userId)

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class ResourcesScreen extends StatefulWidget {
@@ -65,7 +67,7 @@ class _ResourcesScreenState extends State<ResourcesScreen>
 
   Future<void> _loadResources() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await SupabaseDb.instance
           .collection('resources')
           .orderBy('createdAt', descending: true)
           .limit(20)
@@ -75,7 +77,7 @@ class _ResourcesScreenState extends State<ResourcesScreen>
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
 
         resources.add({
           'id': doc.id,

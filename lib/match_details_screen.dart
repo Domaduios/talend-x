@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'individual_chat_screen.dart';
 
@@ -63,7 +64,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen>
 
   Future<void> _loadMatchDetails() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       final userId =
@@ -72,7 +73,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen>
       if (userId == null) return;
 
       // Load other user data
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(userId)
           .get();
@@ -88,7 +89,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen>
       }
 
       // Load current user data
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();

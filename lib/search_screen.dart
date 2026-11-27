@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
@@ -100,11 +101,11 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Future<void> _loadRecentSearches() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -126,7 +127,7 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _saveRecentSearch(String query) async {
     if (query.trim().isEmpty) return;
 
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
     try {
@@ -137,7 +138,7 @@ class _SearchScreenState extends State<SearchScreen>
           updatedSearches.removeLast();
         }
 
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('users')
             .doc(currentUser.uid)
             .update({'recentSearches': updatedSearches});
@@ -185,7 +186,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Future<void> _searchInFirestore(String query) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       if (mounted) {
         setState(() {
@@ -198,7 +199,7 @@ class _SearchScreenState extends State<SearchScreen>
 
     try {
       // Get current user's skills for match calculation
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -212,7 +213,7 @@ class _SearchScreenState extends State<SearchScreen>
       );
 
       // Get all users (not just completed profiles)
-      final allUsersSnapshot = await FirebaseFirestore.instance
+      final allUsersSnapshot = await SupabaseDb.instance
           .collection('users')
           .get();
 
@@ -317,7 +318,7 @@ class _SearchScreenState extends State<SearchScreen>
           double averageRating = 0.0;
 
           try {
-            final sessionsQuery = await FirebaseFirestore.instance
+            final sessionsQuery = await SupabaseDb.instance
                 .collection('sessions')
                 .where('status', isEqualTo: 'completed')
                 .where(

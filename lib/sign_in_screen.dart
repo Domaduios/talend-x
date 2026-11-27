@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'sign_up_screen.dart';
 import 'forgot_password_screen.dart';
 import 'profile_setup_screen.dart';
@@ -53,8 +53,8 @@ class _SignInScreenState extends State<SignInScreen>
       setState(() => _isLoading = true);
 
       try {
-        final userCredential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
+        final userCredential = await SupabaseService.auth
+            .signInWithPassword(
               email: _emailController.text.trim(),
               password: _passwordController.text,
             );
@@ -65,9 +65,9 @@ class _SignInScreenState extends State<SignInScreen>
           // Check if user has completed profile setup
           if (userCredential.user != null) {
             try {
-              final userDoc = await FirebaseFirestore.instance
+              final userDoc = await SupabaseDb.instance
                   .collection('users')
-                  .doc(userCredential.user!.uid)
+                  .doc(userCredential.user!.id)
                   .get();
 
               final userData = userDoc.data();
@@ -80,7 +80,7 @@ class _SignInScreenState extends State<SignInScreen>
                   MaterialPageRoute(
                     builder: (context) => ProfileSetupScreen(
                       userName:
-                          userData?['name'] ?? userCredential.user?.displayName,
+                          userData?['name'] ?? userCredential.user?.userMetadata?['name'] as String?,
                       userEmail:
                           userData?['email'] ?? userCredential.user!.email,
                       userFaculty: userData?['faculty'],
@@ -107,7 +107,7 @@ class _SignInScreenState extends State<SignInScreen>
             }
           }
         }
-      } on FirebaseAuthException catch (e) {
+      } on AuthException catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
@@ -139,69 +139,22 @@ class _SignInScreenState extends State<SignInScreen>
   Future<void> _signInWithGoogle() async {
     try {
       setState(() => _isLoading = true);
-
-      // Sign out first to allow account selection every time
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-      try {
-        await googleSignIn.signOut();
-      } catch (e) {
-        // Ignore sign out errors - user might not be signed in
-      }
-
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      if (googleUser == null) {
-        // User canceled the sign-in
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+      final ok = await SupabaseService.signInWithGoogle();
+      if (!ok) {
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Check if we have valid tokens
-      // Note: idToken might be null in some cases, but accessToken should be available
-      if (googleAuth.accessToken == null) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('فشل الحصول على بيانات المصادقة من Google'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Create a new credential
-      // Use idToken if available, otherwise use accessToken
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
-
       if (mounted) {
         setState(() => _isLoading = false);
-
-        // Check if user has completed profile setup
-        if (userCredential.user != null) {
+        final signedInUser = SupabaseService.currentUser;
+        if (signedInUser != null) {
           // Wait a moment to ensure authentication is fully processed
           await Future.delayed(const Duration(milliseconds: 500));
 
           // Verify user is still authenticated
-          final currentUser = FirebaseAuth.instance.currentUser;
+          final currentUser = SupabaseService.currentUser;
           if (currentUser == null ||
-              currentUser.uid != userCredential.user!.uid) {
+              currentUser.id != signedInUser.id) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -217,7 +170,7 @@ class _SignInScreenState extends State<SignInScreen>
 
           try {
             // Try to read user document
-            final userDoc = await FirebaseFirestore.instance
+            final userDoc = await SupabaseDb.instance
                 .collection('users')
                 .doc(currentUser.uid)
                 .get();
@@ -230,17 +183,17 @@ class _SignInScreenState extends State<SignInScreen>
                 final isAdminEmail =
                     email.toLowerCase() == 'domaduios@gmail.com';
 
-                await FirebaseFirestore.instance
+                await SupabaseDb.instance
                     .collection('users')
                     .doc(currentUser.uid)
                     .set({
                       'email': email,
-                      'name': currentUser.displayName ?? '',
+                      'name': currentUser.userMetadata?['name'] as String? ?? '',
                       'profileCompleted': false,
                       'isAdmin': isAdminEmail,
                       'role': isAdminEmail ? 'admin' : 'user',
-                      'createdAt': FieldValue.serverTimestamp(),
-                      'updatedAt': FieldValue.serverTimestamp(),
+                      'createdAt': DbFieldValue.serverTimestamp(),
+                      'updatedAt': DbFieldValue.serverTimestamp(),
                     });
 
                 // Navigate to Profile Setup for new user
@@ -249,7 +202,7 @@ class _SignInScreenState extends State<SignInScreen>
                     context,
                     MaterialPageRoute(
                       builder: (context) => ProfileSetupScreen(
-                        userName: currentUser.displayName,
+                        userName: currentUser.userMetadata?['name'] as String?,
                         userEmail: currentUser.email,
                         userFaculty: null,
                       ),
@@ -284,7 +237,7 @@ class _SignInScreenState extends State<SignInScreen>
                   context,
                   MaterialPageRoute(
                     builder: (context) => ProfileSetupScreen(
-                      userName: userData?['name'] ?? currentUser.displayName,
+                      userName: userData?['name'] ?? currentUser.userMetadata?['name'] as String?,
                       userEmail: userData?['email'] ?? currentUser.email,
                       userFaculty: userData?['faculty'],
                     ),
@@ -300,7 +253,7 @@ class _SignInScreenState extends State<SignInScreen>
                 );
               }
             }
-          } on FirebaseException catch (e) {
+          } on PostgrestException catch (e) {
             if (mounted) {
               String errorMessage = 'خطأ في قاعدة البيانات: ';
               if (e.code == 'permission-denied') {

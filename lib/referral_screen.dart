@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math' as math;
 
 class ReferralScreen extends StatefulWidget {
@@ -60,11 +61,11 @@ class _ReferralScreenState extends State<ReferralScreen>
 
   Future<void> _loadReferralData() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       // Get or create referral code
-      final referralDoc = await FirebaseFirestore.instance
+      final referralDoc = await SupabaseDb.instance
           .collection('referrals')
           .doc(currentUser.uid)
           .get();
@@ -79,7 +80,7 @@ class _ReferralScreenState extends State<ReferralScreen>
         }
       } else {
         _referralCode = _generateReferralCode(currentUser.uid);
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('referrals')
             .doc(currentUser.uid)
             .set({
@@ -87,12 +88,12 @@ class _ReferralScreenState extends State<ReferralScreen>
               'userId': currentUser.uid,
               'totalReferrals': 0,
               'totalEarnings': 0.0,
-              'createdAt': FieldValue.serverTimestamp(),
+              'createdAt': DbFieldValue.serverTimestamp(),
             });
       }
 
       // Load referrals
-      final referralsSnapshot = await FirebaseFirestore.instance
+      final referralsSnapshot = await SupabaseDb.instance
           .collection('referrals')
           .doc(currentUser.uid)
           .collection('referrals')
@@ -107,7 +108,7 @@ class _ReferralScreenState extends State<ReferralScreen>
         final referredUserId = data['referredUserId'] as String?;
 
         if (referredUserId != null) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(referredUserId)
               .get();
@@ -125,7 +126,7 @@ class _ReferralScreenState extends State<ReferralScreen>
                 'status': isActive ? 'Active' : 'Pending',
                 'earned': earned,
                 'date':
-                    (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+                    parseDbDate(userData['createdAt']) ?? DateTime.now(),
               });
             }
           }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'browse_screen.dart';
@@ -52,11 +53,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Unread notifications count
   int _unreadNotificationsCount = 0;
-  StreamSubscription<QuerySnapshot>? _notificationsSubscription;
+  StreamSubscription<DbQuerySnapshot>? _notificationsSubscription;
   
   // Unread messages count
   int _unreadMessagesCount = 0;
-  StreamSubscription<QuerySnapshot>? _messagesSubscription;
+  StreamSubscription<DbQuerySnapshot>? _messagesSubscription;
 
   @override
   void initState() {
@@ -103,13 +104,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       if (userDoc.exists && mounted) {
@@ -117,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (data != null) {
           setState(() {
             userData = data;
-            userName = data['name'] as String? ?? user.displayName ?? 'User';
+            userName = data['name'] as String? ?? user.userMetadata?['name'] as String? ?? 'User';
             userFaculty = data['faculty'] as String? ?? '';
             userTeachSkills = List<String>.from(data['teachSkills'] as List<dynamic>? ?? []);
             userLearnSkills = List<String>.from(data['learnSkills'] as List<dynamic>? ?? []);
@@ -130,14 +131,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadMatchedUsers() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
       // Get current user's skills
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       if (!currentUserDoc.exists) return;
@@ -153,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
 
       // Find users with matching skills
-      final allUsers = await FirebaseFirestore.instance
+      final allUsers = await SupabaseDb.instance
           .collection('users')
           .where('profileCompleted', isEqualTo: true)
           .get();
@@ -161,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       List<Map<String, dynamic>> matches = [];
 
       for (var doc in allUsers.docs) {
-        if (doc.id == user.uid) continue; // Skip current user
+        if (doc.id == user.id) continue; // Skip current user
 
         final otherUserData = doc.data();
         final otherTeachSkills = List<String>.from(
@@ -221,13 +222,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      final unreadQuery = await FirebaseFirestore.instance
+      final unreadQuery = await SupabaseDb.instance
           .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.id)
           .where('read', isEqualTo: false)
           .get();
 
@@ -242,12 +243,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupNotificationsListener() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
-    _notificationsSubscription = FirebaseFirestore.instance
+    _notificationsSubscription = SupabaseDb.instance
         .collection('notifications')
-        .where('userId', isEqualTo: user.uid)
+        .where('userId', isEqualTo: user.id)
         .where('read', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
@@ -260,23 +261,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadRecentActivities() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
       final List<Map<String, dynamic>> activities = [];
 
       // Get recent notifications
-      final notificationsQuery = await FirebaseFirestore.instance
+      final notificationsQuery = await SupabaseDb.instance
           .collection('notifications')
-          .where('receiverId', isEqualTo: user.uid)
+          .where('receiverId', isEqualTo: user.id)
           .orderBy('createdAt', descending: true)
           .limit(3)
           .get();
 
       for (var doc in notificationsQuery.docs) {
         final data = doc.data();
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         final type = data['type'] ?? 'general';
 
         IconData icon = Icons.notifications;
@@ -340,13 +341,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadUnreadMessagesCount() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      final unreadQuery = await FirebaseFirestore.instance
+      final unreadQuery = await SupabaseDb.instance
           .collection('messages')
-          .where('receiverId', isEqualTo: user.uid)
+          .where('receiverId', isEqualTo: user.id)
           .where('read', isEqualTo: false)
           .get();
 
@@ -361,12 +362,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupMessagesListener() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
-    _messagesSubscription = FirebaseFirestore.instance
+    _messagesSubscription = SupabaseDb.instance
         .collection('messages')
-        .where('receiverId', isEqualTo: user.uid)
+        .where('receiverId', isEqualTo: user.id)
         .where('read', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {

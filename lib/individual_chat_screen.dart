@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
@@ -43,8 +44,8 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
 
   // Messages from Firestore
   List<Map<String, dynamic>> _messages = [];
-  StreamSubscription<QuerySnapshot>? _messagesSubscription;
-  StreamSubscription<QuerySnapshot>? _receivedMessagesSubscription;
+  StreamSubscription<DbQuerySnapshot>? _messagesSubscription;
+  StreamSubscription<DbQuerySnapshot>? _receivedMessagesSubscription;
 
   // Get user data from either userData map or individual parameters
   Map<String, dynamic> get _userData {
@@ -137,7 +138,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
   }
 
   void _loadMessages() {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       print('❌ Chat: No current user for loading messages');
       if (mounted) {
@@ -165,9 +166,9 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         print('📥 Chat: Loading messages for $_userId...');
 
         // Get sent messages (without orderBy to avoid index requirement)
-        QuerySnapshot sentSnapshot;
+        DbQuerySnapshot sentSnapshot;
         try {
-          sentSnapshot = await FirebaseFirestore.instance
+          sentSnapshot = await SupabaseDb.instance
               .collection('messages')
               .where('senderId', isEqualTo: currentUser.uid)
               .where('receiverId', isEqualTo: _userId)
@@ -175,7 +176,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
               .get();
         } catch (e) {
           print('⚠️ Chat: orderBy failed for sent messages, fetching all: $e');
-          sentSnapshot = await FirebaseFirestore.instance
+          sentSnapshot = await SupabaseDb.instance
               .collection('messages')
               .where('senderId', isEqualTo: currentUser.uid)
               .where('receiverId', isEqualTo: _userId)
@@ -183,9 +184,9 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         }
 
         // Get received messages (without orderBy to avoid index requirement)
-        QuerySnapshot receivedSnapshot;
+        DbQuerySnapshot receivedSnapshot;
         try {
-          receivedSnapshot = await FirebaseFirestore.instance
+          receivedSnapshot = await SupabaseDb.instance
               .collection('messages')
               .where('senderId', isEqualTo: _userId)
               .where('receiverId', isEqualTo: currentUser.uid)
@@ -195,7 +196,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
           print(
             '⚠️ Chat: orderBy failed for received messages, fetching all: $e',
           );
-          receivedSnapshot = await FirebaseFirestore.instance
+          receivedSnapshot = await SupabaseDb.instance
               .collection('messages')
               .where('senderId', isEqualTo: _userId)
               .where('receiverId', isEqualTo: currentUser.uid)
@@ -207,7 +208,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         );
 
         // Combine both
-        final allDocs = <QueryDocumentSnapshot>[];
+        final allDocs = <DbDocSnapshot>[];
         allDocs.addAll(sentSnapshot.docs);
         allDocs.addAll(receivedSnapshot.docs);
 
@@ -215,8 +216,8 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         allDocs.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>?;
           final bData = b.data() as Map<String, dynamic>?;
-          final aTime = aData?['createdAt'] as Timestamp?;
-          final bTime = bData?['createdAt'] as Timestamp?;
+          final aTime = parseDbDate(aData?['createdAt']);
+          final bTime = parseDbDate(bData?['createdAt']);
           if (aTime == null && bTime == null) return 0;
           if (aTime == null) return 1;
           if (bTime == null) return -1;
@@ -234,7 +235,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
                 'text': data['content'] ?? '',
                 'isMine': data['senderId'] == currentUser.uid,
                 'timestamp':
-                    (data['createdAt'] as Timestamp?)?.toDate() ??
+                    parseDbDate(data['createdAt']) ??
                     DateTime.now(),
                 'isRead': data['read'] ?? false,
               };
@@ -270,14 +271,14 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
     // Listen for sent messages in real-time (without orderBy to avoid index requirement)
     Query sentMessagesQuery;
     try {
-      sentMessagesQuery = FirebaseFirestore.instance
+      sentMessagesQuery = SupabaseDb.instance
           .collection('messages')
           .where('senderId', isEqualTo: currentUser.uid)
           .where('receiverId', isEqualTo: _userId)
           .orderBy('createdAt', descending: false);
     } catch (e) {
       print('⚠️ Chat: Using query without orderBy for sent messages listener');
-      sentMessagesQuery = FirebaseFirestore.instance
+      sentMessagesQuery = SupabaseDb.instance
           .collection('messages')
           .where('senderId', isEqualTo: currentUser.uid)
           .where('receiverId', isEqualTo: _userId);
@@ -302,7 +303,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
     // Listen for received messages in real-time (without orderBy to avoid index requirement)
     Query receivedMessagesQuery;
     try {
-      receivedMessagesQuery = FirebaseFirestore.instance
+      receivedMessagesQuery = SupabaseDb.instance
           .collection('messages')
           .where('senderId', isEqualTo: _userId)
           .where('receiverId', isEqualTo: currentUser.uid)
@@ -311,7 +312,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
       print(
         '⚠️ Chat: Using query without orderBy for received messages listener',
       );
-      receivedMessagesQuery = FirebaseFirestore.instance
+      receivedMessagesQuery = SupabaseDb.instance
           .collection('messages')
           .where('senderId', isEqualTo: _userId)
           .where('receiverId', isEqualTo: currentUser.uid);
@@ -335,7 +336,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
   }
 
   Future<void> _markMessagesAsRead() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null || _userId.isEmpty) {
       print(
         '⚠️ Chat: Cannot mark as read - currentUser: ${currentUser?.uid}, _userId: $_userId',
@@ -347,7 +348,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
       print('📖 Chat: Marking messages as read from $_userId...');
 
       // Get all unread messages from this user
-      final unreadMessages = await FirebaseFirestore.instance
+      final unreadMessages = await SupabaseDb.instance
           .collection('messages')
           .where('receiverId', isEqualTo: currentUser.uid)
           .where('senderId', isEqualTo: _userId)
@@ -358,7 +359,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
 
       if (unreadMessages.docs.isNotEmpty) {
         // Use batch write for efficiency (max 500 operations per batch)
-        final batch = FirebaseFirestore.instance.batch();
+        final batch = SupabaseDb.instance.batch();
         int batchCount = 0;
 
         for (final doc in unreadMessages.docs) {
@@ -424,7 +425,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       print('❌ Chat: No current user');
       if (mounted) {
@@ -468,7 +469,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         'receiverId': _userId,
         'content': messageText,
         'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DbFieldValue.serverTimestamp(),
       };
 
       print('📤 Chat: Attempting to save message:');
@@ -496,7 +497,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
         });
       }
 
-      final messageRef = await FirebaseFirestore.instance
+      final messageRef = await SupabaseDb.instance
           .collection('messages')
           .add(messageData);
 
@@ -517,7 +518,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
             );
             if (tempIndex != -1) {
               final savedTimestamp =
-                  (savedData?['createdAt'] as Timestamp?)?.toDate() ??
+                  parseDbDate(savedData['createdAt']) ??
                   DateTime.now();
               _messages[tempIndex] = {
                 'id': messageRef.id,
@@ -1307,7 +1308,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
               final dialogContext = context;
               Navigator.pop(dialogContext);
 
-              final currentUser = FirebaseAuth.instance.currentUser;
+              final currentUser = SupabaseService.currentUser;
               if (currentUser == null) {
                 if (mounted) {
                   ScaffoldMessenger.of(this.context).showSnackBar(
@@ -1345,13 +1346,13 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
                 }
 
                 // Get all messages between current user and this user
-                final sentMessages = await FirebaseFirestore.instance
+                final sentMessages = await SupabaseDb.instance
                     .collection('messages')
                     .where('senderId', isEqualTo: currentUser.uid)
                     .where('receiverId', isEqualTo: _userId)
                     .get();
 
-                final receivedMessages = await FirebaseFirestore.instance
+                final receivedMessages = await SupabaseDb.instance
                     .collection('messages')
                     .where('senderId', isEqualTo: _userId)
                     .where('receiverId', isEqualTo: currentUser.uid)
@@ -1362,7 +1363,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
                 );
 
                 // Delete all messages using batch
-                final batch = FirebaseFirestore.instance.batch();
+                final batch = SupabaseDb.instance.batch();
                 int batchCount = 0;
 
                 for (var doc in sentMessages.docs) {
@@ -1454,7 +1455,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
             onPressed: () async {
               Navigator.pop(context);
 
-              final currentUser = FirebaseAuth.instance.currentUser;
+              final currentUser = SupabaseService.currentUser;
               if (currentUser == null) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1483,7 +1484,7 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
                 print('🚫 Chat: Blocking user $_userId...');
 
                 // Check if already blocked
-                final existingBlock = await FirebaseFirestore.instance
+                final existingBlock = await SupabaseDb.instance
                     .collection('blocked_users')
                     .where('userId', isEqualTo: currentUser.uid)
                     .where('blockedUserId', isEqualTo: _userId)
@@ -1504,13 +1505,13 @@ class _IndividualChatScreenState extends State<IndividualChatScreen>
                 }
 
                 // Block user in Firestore
-                await FirebaseFirestore.instance
+                await SupabaseDb.instance
                     .collection('blocked_users')
                     .add({
                       'userId': currentUser.uid,
                       'blockedUserId': _userId,
                       'blockedUserName': _userName,
-                      'createdAt': FieldValue.serverTimestamp(),
+                      'createdAt': DbFieldValue.serverTimestamp(),
                     });
 
                 print('✅ Chat: User $_userId blocked successfully');

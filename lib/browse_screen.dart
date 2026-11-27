@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
@@ -97,12 +98,12 @@ class _BrowseScreenState extends State<BrowseScreen>
   }
 
   Future<void> _loadUsers() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
     try {
       // Get current user's skills for matching
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -116,7 +117,7 @@ class _BrowseScreenState extends State<BrowseScreen>
       final currentLearnSkills = List<String>.from(currentUserData['learnSkills'] as List<dynamic>? ?? []);
 
       // Get ALL users (not just completed profiles)
-      final allUsersSnapshot = await FirebaseFirestore.instance
+      final allUsersSnapshot = await SupabaseDb.instance
           .collection('users')
           .get();
       
@@ -164,7 +165,7 @@ class _BrowseScreenState extends State<BrowseScreen>
           double averageRating = 0.0;
           
           try {
-            final sessionsQuery = await FirebaseFirestore.instance
+            final sessionsQuery = await SupabaseDb.instance
                 .collection('sessions')
                 .where('status', isEqualTo: 'completed')
                 .where(Filter.or(
@@ -295,7 +296,7 @@ class _BrowseScreenState extends State<BrowseScreen>
   }
 
   Future<void> _performFirestoreSearch(String query) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       if (mounted) {
         setState(() => _isSearching = false);
@@ -308,7 +309,7 @@ class _BrowseScreenState extends State<BrowseScreen>
       print('🔍 Browse: Searching Firestore for: "$queryLower"');
 
       // Search in Firestore - get ALL users (not just completed profiles)
-      final usersSnapshot = await FirebaseFirestore.instance
+      final usersSnapshot = await SupabaseDb.instance
           .collection('users')
           .get();
 
@@ -375,7 +376,7 @@ class _BrowseScreenState extends State<BrowseScreen>
           print('✅ Browse: Adding new user from Firestore: "$userName"');
 
           // Calculate match percentage
-          final currentUserDoc = await FirebaseFirestore.instance
+          final currentUserDoc = await SupabaseDb.instance
               .collection('users')
               .doc(currentUser.uid)
               .get();
@@ -406,7 +407,7 @@ class _BrowseScreenState extends State<BrowseScreen>
           double averageRating = 0.0;
           
           try {
-            final sessionsQuery = await FirebaseFirestore.instance
+            final sessionsQuery = await SupabaseDb.instance
                 .collection('sessions')
                 .where('status', isEqualTo: 'completed')
                 .where(Filter.or(

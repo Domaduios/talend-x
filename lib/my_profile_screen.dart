@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'edit_profile_screen.dart';
 import 'utils/app_localizations.dart';
@@ -74,16 +75,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
   }
 
   Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) {
       setState(() => _isLoading = false);
       return;
     }
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       if (userDoc.exists) {
@@ -107,9 +108,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         
         try {
           // Get completed sessions where user is teacher
-          final completedTeacherSessions = await FirebaseFirestore.instance
+          final completedTeacherSessions = await SupabaseDb.instance
               .collection('sessions')
-              .where('teacherId', isEqualTo: user.uid)
+              .where('teacherId', isEqualTo: user.id)
               .where('status', isEqualTo: 'completed')
               .limit(100)
               .get();
@@ -126,9 +127,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         
         try {
           // Get completed sessions where user is learner
-          final completedLearnerSessions = await FirebaseFirestore.instance
+          final completedLearnerSessions = await SupabaseDb.instance
               .collection('sessions')
-              .where('learnerId', isEqualTo: user.uid)
+              .where('learnerId', isEqualTo: user.id)
               .where('status', isEqualTo: 'completed')
               .limit(100)
               .get();
@@ -147,9 +148,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         
         try {
           // Get average rating from reviews
-          final reviewsQuery = await FirebaseFirestore.instance
+          final reviewsQuery = await SupabaseDb.instance
               .collection('reviews')
-              .where('reviewedUserId', isEqualTo: user.uid)
+              .where('reviewedUserId', isEqualTo: user.id)
               .limit(100)
               .get();
           
@@ -167,9 +168,9 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         
         try {
           // Get total connections
-          final connectionsQuery = await FirebaseFirestore.instance
+          final connectionsQuery = await SupabaseDb.instance
               .collection('connections')
-              .where('userId', isEqualTo: user.uid)
+              .where('userId', isEqualTo: user.id)
               .where('status', isEqualTo: 'accepted')
               .limit(100)
               .get();
@@ -182,16 +183,16 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         try {
           // Calculate success rate (completed / total scheduled)
           // Get sessions where user is teacher
-          final teacherSessionsQuery = await FirebaseFirestore.instance
+          final teacherSessionsQuery = await SupabaseDb.instance
               .collection('sessions')
-              .where('teacherId', isEqualTo: user.uid)
+              .where('teacherId', isEqualTo: user.id)
               .limit(100)
               .get();
           
           // Get sessions where user is learner
-          final learnerSessionsQuery = await FirebaseFirestore.instance
+          final learnerSessionsQuery = await SupabaseDb.instance
               .collection('sessions')
-              .where('learnerId', isEqualTo: user.uid)
+              .where('learnerId', isEqualTo: user.id)
               .limit(100)
               .get();
           
@@ -209,7 +210,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               : 0;
           
         // Calculate experience (time since joined)
-        final joinedDate = (userData['createdAt'] as Timestamp?)?.toDate() ??
+        final joinedDate = parseDbDate(userData['createdAt']) ??
             DateTime.now().subtract(const Duration(days: 365));
         final experienceYears = DateTime.now().difference(joinedDate).inDays ~/ 365;
         final experienceText = experienceYears > 0 
@@ -219,7 +220,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
         if (mounted) {
           setState(() {
             _myData = {
-              'name': userData['name'] ?? user.displayName ?? 'User',
+              'name': userData['name'] ?? user.userMetadata?['name'] as String? ?? 'User',
               'email': userData['email'] ?? user.email ?? '',
               'phone': userData['phone'] ?? 'Not provided',
               'faculty': userData['faculty'] ?? '',
@@ -287,10 +288,10 @@ class _MyProfileScreenState extends State<MyProfileScreen>
       print('Error loading user data: $e');
       if (mounted) {
         // Set default values if error occurs to allow screen to open
-        final currentUser = FirebaseAuth.instance.currentUser;
+        final currentUser = SupabaseService.currentUser;
         setState(() {
           _myData = {
-            'name': currentUser?.displayName ?? 'User',
+            'name': currentUser?.userMetadata?['name'] as String? ?? 'User',
             'email': currentUser?.email ?? '',
             'phone': 'Not provided',
             'faculty': '',
@@ -1629,13 +1630,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _checkAdminStatus() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       if (userDoc.exists) {
@@ -1695,7 +1696,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             onPressed: () async {
               Navigator.pop(context);
               // Logout logic and navigate to sign in
-              await FirebaseAuth.instance.signOut();
+              await SupabaseService.auth.signOut();
               if (context.mounted) {
                 Navigator.of(
                   context,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class ReportUserScreen extends StatefulWidget {
@@ -95,14 +96,14 @@ class _ReportUserScreenState extends State<ReportUserScreen>
       setState(() => _isLoading = true);
 
       try {
-        final currentUser = FirebaseAuth.instance.currentUser;
+        final currentUser = SupabaseService.currentUser;
         if (currentUser == null) return;
 
         final reportedUserId =
             widget.userData['id'] ?? widget.userData['userId'];
 
         // Save report
-        await FirebaseFirestore.instance.collection('reports').add({
+        await SupabaseDb.instance.collection('reports').add({
           'reportedUserId': reportedUserId,
           'reportedUserName': widget.userData['name'] ?? 'Unknown',
           'reporterId': currentUser.uid,
@@ -110,16 +111,16 @@ class _ReportUserScreenState extends State<ReportUserScreen>
           'description': _descriptionController.text,
           'status': 'pending',
           'blockUser': _blockUser,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': DbFieldValue.serverTimestamp(),
         });
 
         // Block user if requested
         if (_blockUser && reportedUserId != null) {
-          await FirebaseFirestore.instance.collection('blocked_users').add({
+          await SupabaseDb.instance.collection('blocked_users').add({
             'blockedBy': currentUser.uid,
             'blockedUserId': reportedUserId,
             'reason': _selectedReason,
-            'blockedAt': FieldValue.serverTimestamp(),
+            'blockedAt': DbFieldValue.serverTimestamp(),
           });
         }
 

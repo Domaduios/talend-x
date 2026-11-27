@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'home_screen.dart';
@@ -47,8 +48,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   List<Map<String, dynamic>> _pendingReports = [];
 
   // Stream subscriptions
-  StreamSubscription<QuerySnapshot>? _usersSubscription;
-  StreamSubscription<QuerySnapshot>? _reportsSubscription;
+  StreamSubscription<DbQuerySnapshot>? _usersSubscription;
+  StreamSubscription<DbQuerySnapshot>? _reportsSubscription;
 
   @override
   void initState() {
@@ -84,7 +85,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _checkAdminAuthorization() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       // Not logged in, redirect to home
       if (mounted) {
@@ -96,7 +97,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     }
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -117,7 +118,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
         if (isAdmin) {
           setState(() {
-            _adminName = userData['name'] ?? currentUser.displayName ?? 'Admin';
+            _adminName = userData['name'] ?? currentUser.userMetadata?['name'] as String? ?? 'Admin';
             _adminRole = userData['role'] ?? 'Super Admin';
             _isAuthorized = true;
             _isLoading = false;
@@ -182,15 +183,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _loadDashboardData() async {
     try {
       // Load stats
-      final usersSnapshot = await FirebaseFirestore.instance
+      final usersSnapshot = await SupabaseDb.instance
           .collection('users')
           .get();
 
-      final sessionsSnapshot = await FirebaseFirestore.instance
+      final sessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .get();
 
-      final reportsSnapshot = await FirebaseFirestore.instance
+      final reportsSnapshot = await SupabaseDb.instance
           .collection('reports')
           .where('status', isEqualTo: 'pending')
           .get();
@@ -212,7 +213,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           activeUsers++;
         }
         // Check if user joined today
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         if (createdAt != null) {
           final dateTime = createdAt.toDate();
           if (dateTime.isAfter(todayStart) &&
@@ -228,8 +229,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           completedSessions++;
         }
         // Check if session is today - check both 'date' and 'createdAt'
-        final sessionDate = data['date'] as Timestamp?;
-        final createdAt = data['createdAt'] as Timestamp?;
+        final sessionDate = parseDbDate(data['date']);
+        final createdAt = parseDbDate(data['createdAt']);
         final checkDate = sessionDate ?? createdAt;
         if (checkDate != null) {
           final dateTime = checkDate.toDate();
@@ -275,7 +276,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     _usersSubscription?.cancel();
     // Load all users, not just recent 10
     _loadAllUsers();
-    _usersSubscription = FirebaseFirestore.instance
+    _usersSubscription = SupabaseDb.instance
         .collection('users')
         .orderBy('createdAt', descending: true)
         .limit(10)
@@ -286,7 +287,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               final List<Map<String, dynamic>> users = [];
               for (var doc in snapshot.docs) {
                 final data = doc.data();
-                final createdAt = data['createdAt'] as Timestamp?;
+                final createdAt = parseDbDate(data['createdAt']);
                 users.add({
                   'id': doc.id,
                   'name': data['name'] ?? 'Unknown',
@@ -311,14 +312,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Future<void> _loadAllUsers() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await SupabaseDb.instance
           .collection('users')
           .get();
 
       final List<Map<String, dynamic>> users = [];
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final createdAt = data['createdAt'] as Timestamp?;
+        final createdAt = parseDbDate(data['createdAt']);
         users.add({
           'id': doc.id,
           'name': data['name'] ?? 'Unknown',
@@ -388,7 +389,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       print('Admin: Searching Firestore for users: $queryLower');
 
       // Get all users from Firestore
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await SupabaseDb.instance
           .collection('users')
           .get();
 
@@ -411,7 +412,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             continue;
           }
 
-          final createdAt = data['createdAt'] as Timestamp?;
+          final createdAt = parseDbDate(data['createdAt']);
           searchResults.add({
             'id': doc.id,
             'name': data['name'] ?? 'Unknown',
@@ -454,7 +455,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   void _listenToReports() {
     _reportsSubscription?.cancel();
-    _reportsSubscription = FirebaseFirestore.instance
+    _reportsSubscription = SupabaseDb.instance
         .collection('reports')
         .where('status', isEqualTo: 'pending')
         .snapshots()
@@ -464,7 +465,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               final List<Map<String, dynamic>> reports = [];
               for (var doc in snapshot.docs) {
                 final data = doc.data();
-                final createdAt = data['createdAt'] as Timestamp?;
+                final createdAt = parseDbDate(data['createdAt']);
 
                 // Get reporter and reported user names
                 String reporterName =
@@ -476,7 +477,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 if (reporterName.length > 20 || !reporterName.contains(' ')) {
                   // Likely a user ID, try to get name
                   try {
-                    final userDoc = await FirebaseFirestore.instance
+                    final userDoc = await SupabaseDb.instance
                         .collection('users')
                         .doc(reporterName)
                         .get();
@@ -490,7 +491,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                 if (reportedName.length > 20 || !reportedName.contains(' ')) {
                   try {
-                    final userDoc = await FirebaseFirestore.instance
+                    final userDoc = await SupabaseDb.instance
                         .collection('users')
                         .doc(reportedName)
                         .get();
@@ -539,7 +540,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Future<void> _loadReports() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await SupabaseDb.instance
           .collection('reports')
           .where('status', isEqualTo: 'pending')
           .get();
@@ -548,7 +549,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         final List<Map<String, dynamic>> reports = [];
         for (var doc in snapshot.docs) {
           final data = doc.data();
-          final createdAt = data['createdAt'] as Timestamp?;
+          final createdAt = parseDbDate(data['createdAt']);
 
           String reporterName =
               data['reporterName'] ?? data['reporterId'] ?? 'Unknown';
@@ -558,7 +559,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           // Fetch names if they are user IDs
           if (reporterName.length > 20 || !reporterName.contains(' ')) {
             try {
-              final userDoc = await FirebaseFirestore.instance
+              final userDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(reporterName)
                   .get();
@@ -572,7 +573,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
           if (reportedName.length > 20 || !reportedName.contains(' ')) {
             try {
-              final userDoc = await FirebaseFirestore.instance
+              final userDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(reportedName)
                   .get();
@@ -932,12 +933,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
                 if (action == 'approve') {
                   // Update report status
-                  await FirebaseFirestore.instance
+                  await SupabaseDb.instance
                       .collection('reports')
                       .doc(reportId)
                       .update({
                         'status': 'approved',
-                        'resolvedAt': FieldValue.serverTimestamp(),
+                        'resolvedAt': DbFieldValue.serverTimestamp(),
                       });
 
                   // Suspend reported user
@@ -946,19 +947,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                       report['reportedName'] as String;
                   if (reportedId.length > 20 || !reportedId.contains(' ')) {
                     // Likely a user ID
-                    await FirebaseFirestore.instance
+                    await SupabaseDb.instance
                         .collection('users')
                         .doc(reportedId)
                         .update({'suspended': true});
                   }
                 } else {
                   // Reject report
-                  await FirebaseFirestore.instance
+                  await SupabaseDb.instance
                       .collection('reports')
                       .doc(reportId)
                       .update({
                         'status': 'rejected',
-                        'resolvedAt': FieldValue.serverTimestamp(),
+                        'resolvedAt': DbFieldValue.serverTimestamp(),
                       });
                 }
 
@@ -2372,7 +2373,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _grantAdminAccess(String email) async {
     try {
       // Find user by email
-      final usersQuery = await FirebaseFirestore.instance
+      final usersQuery = await SupabaseDb.instance
           .collection('users')
           .where('email', isEqualTo: email)
           .limit(1)
@@ -2430,7 +2431,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       }
 
       // Grant admin access
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      await SupabaseDb.instance.collection('users').doc(userId).update({
         'isAdmin': true,
         'role': 'admin',
       });
@@ -2481,7 +2482,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   Future<void> _revokeAdminAccess(String email) async {
     try {
       // Find user by email
-      final usersQuery = await FirebaseFirestore.instance
+      final usersQuery = await SupabaseDb.instance
           .collection('users')
           .where('email', isEqualTo: email)
           .limit(1)
@@ -2539,7 +2540,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       }
 
       // Revoke admin access
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+      await SupabaseDb.instance.collection('users').doc(userId).update({
         'isAdmin': false,
         'role': 'user',
       });

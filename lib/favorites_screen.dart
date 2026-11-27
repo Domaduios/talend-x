@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
@@ -23,7 +24,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   // Favorites Data from Firestore
   List<Map<String, dynamic>> _favorites = [];
   bool _isLoading = true;
-  StreamSubscription<QuerySnapshot>? _favoritesSubscription;
+  StreamSubscription<DbQuerySnapshot>? _favoritesSubscription;
 
   @override
   void initState() {
@@ -65,10 +66,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   void _setupFavoritesListener() {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
-    _favoritesSubscription = FirebaseFirestore.instance
+    _favoritesSubscription = SupabaseDb.instance
         .collection('favorites')
         .where('userId', isEqualTo: currentUser.uid)
         .snapshots()
@@ -79,7 +80,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _loadFavorites() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -89,7 +90,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     try {
       // Get current user's skills for match calculation
-      final currentUserDoc = await FirebaseFirestore.instance
+      final currentUserDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -103,7 +104,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       );
 
       // Get favorites from Firestore
-      final favoritesSnapshot = await FirebaseFirestore.instance
+      final favoritesSnapshot = await SupabaseDb.instance
           .collection('favorites')
           .where('userId', isEqualTo: currentUser.uid)
           .get();
@@ -124,7 +125,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           }
 
           // Get user data
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(favoriteUserId)
               .get();
@@ -164,7 +165,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           double averageRating = 0.0;
 
           try {
-            final sessionsQuery = await FirebaseFirestore.instance
+            final sessionsQuery = await SupabaseDb.instance
                 .collection('sessions')
                 .where('status', isEqualTo: 'completed')
                 .where(
@@ -190,7 +191,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             print('Error loading user stats: $e');
           }
 
-          final savedAt = favData['createdAt'] as Timestamp?;
+          final savedAt = parseDbDate(favData['createdAt']);
 
           favorites.add({
             'id': favoriteUserId,
@@ -254,7 +255,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   }
 
   Future<void> _removeFromFavorites(String userId) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
     // Save the widget's context before showing dialog
@@ -282,7 +283,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
               try {
                 // Find and delete favorite document
-                final favoritesQuery = await FirebaseFirestore.instance
+                final favoritesQuery = await SupabaseDb.instance
                     .collection('favorites')
                     .where('userId', isEqualTo: currentUser.uid)
                     .where('favoriteUserId', isEqualTo: userId)

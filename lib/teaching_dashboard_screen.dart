@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'user_profile_screen.dart';
 
@@ -69,11 +70,11 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
 
   Future<void> _loadTeachingData() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       // Load all sessions where current user is a teacher
-      final sessionsSnapshot = await FirebaseFirestore.instance
+      final sessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .where('participants', arrayContains: currentUser.uid)
           .get();
@@ -105,7 +106,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
 
         totalSessions++;
 
-        final scheduledDate = data['scheduledDate'] as Timestamp?;
+        final scheduledDate = parseDbDate(data['scheduledDate']);
         if (scheduledDate != null) {
           final date = scheduledDate.toDate();
           if (date.isAfter(thisMonthStart)) {
@@ -125,7 +126,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
       // Load students data
       final List<Map<String, dynamic>> students = [];
       for (var studentId in studentIds.take(10)) {
-        final userDoc = await FirebaseFirestore.instance
+        final userDoc = await SupabaseDb.instance
             .collection('users')
             .doc(studentId)
             .get();
@@ -157,7 +158,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
             String? skillLearning;
             for (var doc in studentSessions) {
               final data = doc.data();
-              final scheduledDate = data['scheduledDate'] as Timestamp?;
+              final scheduledDate = parseDbDate(data['scheduledDate']);
               if (scheduledDate != null) {
                 final date = scheduledDate.toDate();
                 if (lastSession == null || date.isAfter(lastSession)) {
@@ -198,7 +199,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
       }
 
       // Load upcoming sessions
-      final upcomingSessionsSnapshot = await FirebaseFirestore.instance
+      final upcomingSessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .where('participants', arrayContains: currentUser.uid)
           .where('status', isEqualTo: 'scheduled')
@@ -209,7 +210,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
       final List<Map<String, dynamic>> upcomingSessions = [];
       for (var doc in upcomingSessionsSnapshot.docs) {
         final data = doc.data();
-        final scheduledDate = data['scheduledDate'] as Timestamp?;
+        final scheduledDate = parseDbDate(data['scheduledDate']);
         final participants = List<String>.from(data['participants'] ?? []);
         final studentId = participants.firstWhere(
           (id) => id != currentUser.uid,
@@ -217,7 +218,7 @@ class _TeachingDashboardScreenState extends State<TeachingDashboardScreen>
         );
 
         if (studentId.isNotEmpty) {
-          final userDoc = await FirebaseFirestore.instance
+          final userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(studentId)
               .get();

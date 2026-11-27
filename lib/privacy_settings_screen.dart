@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class PrivacySettingsScreen extends StatefulWidget {
@@ -61,10 +62,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> with Tick
 
   Future<void> _loadPrivacySettings() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();
@@ -105,10 +106,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> with Tick
 
   Future<void> _saveSettings() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
-      await FirebaseFirestore.instance
+      await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .update({
@@ -124,7 +125,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> with Tick
           'whoCanViewProfile': _whoCanViewProfile,
           'whoCanMessageMe': _whoCanMessageMe,
         },
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': DbFieldValue.serverTimestamp(),
       });
 
       if (mounted) {

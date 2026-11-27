@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'home_screen.dart';
 import 'utils/app_localizations.dart';
 
@@ -246,7 +247,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     setState(() => _isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = SupabaseService.currentUser;
       if (user == null) {
         if (mounted) {
           setState(() => _isLoading = false);
@@ -255,13 +256,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         return;
       }
 
-      print('Starting profile setup for user: ${user.uid}');
+      print('Starting profile setup for user: ${user.id}');
       print('Availability: $_selectedAvailability');
       print('Preference: $_selectedPreference');
 
       // Prepare profile data - use defaults if not selected
       final profileData = {
-        'name': widget.userName ?? user.displayName ?? 'User',
+        'name': widget.userName ?? user.userMetadata?['name'] as String? ?? 'User',
         'email': widget.userEmail ?? user.email ?? '',
         'faculty': widget.userFaculty ?? '',
         'bio': _bioController.text.trim(),
@@ -273,7 +274,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         'availability': _selectedAvailability ?? 'Flexible',
         'preference': _selectedPreference ?? 'Flexible',
         'profileCompleted': true,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': DbFieldValue.serverTimestamp(),
       };
 
       print('Profile data prepared:');
@@ -283,17 +284,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       print('Updating Firestore with profile data...');
 
       // Update user document in Firestore
-      await FirebaseFirestore.instance
+      await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .update(profileData);
 
       print('Firestore update completed');
 
       // Verify the update was successful
-      final updatedDoc = await FirebaseFirestore.instance
+      final updatedDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       final isCompleted = updatedDoc.data()?['profileCompleted'] == true;
@@ -324,7 +325,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
           );
         }
       }
-    } on FirebaseException catch (e) {
+    } on PostgrestException catch (e) {
       print('Firebase error: ${e.code} - ${e.message}');
       if (mounted) {
         setState(() => _isLoading = false);

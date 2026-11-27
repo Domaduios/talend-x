@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'withdrawal_screen.dart';
 import 'payment_method_screen.dart';
@@ -61,11 +62,11 @@ class _WalletScreenState extends State<WalletScreen>
 
   Future<void> _loadWalletData() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       // Load wallet balance
-      final walletDoc = await FirebaseFirestore.instance
+      final walletDoc = await SupabaseDb.instance
           .collection('wallets')
           .doc(currentUser.uid)
           .get();
@@ -79,7 +80,7 @@ class _WalletScreenState extends State<WalletScreen>
       }
 
       // Load transactions
-      final transactionsSnapshot = await FirebaseFirestore.instance
+      final transactionsSnapshot = await SupabaseDb.instance
           .collection('transactions')
           .where('userId', isEqualTo: currentUser.uid)
           .orderBy('timestamp', descending: true)
@@ -92,7 +93,7 @@ class _WalletScreenState extends State<WalletScreen>
 
       for (var doc in transactionsSnapshot.docs) {
         final data = doc.data();
-        final timestamp = data['timestamp'] as Timestamp?;
+        final timestamp = parseDbDate(data['timestamp']);
         final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
         final type = data['type'] ?? 'earning';
 

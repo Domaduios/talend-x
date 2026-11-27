@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 import 'utils/app_localizations.dart';
 
@@ -104,7 +105,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   }
 
   Future<void> _loadUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) {
       if (mounted) {
         setState(() => _isInitialized = true);
@@ -113,9 +114,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     }
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
-          .doc(user.uid)
+          .doc(user.id)
           .get();
 
       if (mounted) {
@@ -123,7 +124,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           final userData = userDoc.data();
           if (userData != null) {
             setState(() {
-              _nameController.text = userData['name'] as String? ?? user.displayName ?? '';
+              _nameController.text = userData['name'] as String? ?? user.userMetadata?['name'] as String? ?? '';
               _emailController.text = userData['email'] as String? ?? user.email ?? '';
               _phoneController.text = userData['phone'] as String? ?? '';
               _bioController.text = userData['bio'] as String? ?? '';
@@ -214,7 +215,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
       setState(() => _isLoading = true);
 
-      final user = FirebaseAuth.instance.currentUser;
+      final user = SupabaseService.currentUser;
       if (user == null) {
         setState(() => _isLoading = false);
         return;
@@ -234,18 +235,20 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           'preference': _selectedPreference ?? 'Hybrid (Online + In-Person)',
           'teachSkills': _selectedTeachSkills,
           'learnSkills': _selectedLearnSkills,
-          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': DbFieldValue.serverTimestamp(),
         };
 
         // Update Firestore
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(user.id)
             .update(profileData);
 
         // Update email if changed
         if (_emailController.text.trim() != user.email) {
-          await user.updateEmail(_emailController.text.trim());
+          await SupabaseService.auth.updateUser(
+            UserAttributes(email: _emailController.text.trim()),
+          );
         }
 
         if (mounted) {
@@ -660,12 +663,13 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   }
 
   Widget _buildProfilePictureSection() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
+    final metaName = user?.userMetadata?['name'] as String?;
     final userName = _nameController.text.isNotEmpty
         ? _nameController.text[0].toUpperCase()
-        : user?.displayName?.isNotEmpty == true
-        ? user!.displayName![0].toUpperCase()
-        : 'U';
+        : (metaName != null && metaName.isNotEmpty)
+            ? metaName[0].toUpperCase()
+            : 'U';
 
     return Center(
       child: Stack(

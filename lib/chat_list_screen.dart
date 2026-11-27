@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'individual_chat_screen.dart';
@@ -23,7 +24,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   List<Map<String, dynamic>> _allChats = [];
   List<Map<String, dynamic>> _filteredChats = [];
-  StreamSubscription<QuerySnapshot>? _messagesSubscription;
+  StreamSubscription<DbQuerySnapshot>? _messagesSubscription;
   bool _isLoading = true;
   bool _isSearching = false;
 
@@ -70,7 +71,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Future<void> _loadChats() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -83,9 +84,9 @@ class _ChatListScreenState extends State<ChatListScreen>
     try {
       // Get all unique chat partners from messages
       print('🔍 ChatList: Fetching sent messages...');
-      QuerySnapshot messagesQuery;
+      DbQuerySnapshot messagesQuery;
       try {
-        messagesQuery = await FirebaseFirestore.instance
+        messagesQuery = await SupabaseDb.instance
             .collection('messages')
             .where('senderId', isEqualTo: currentUser.uid)
             .get();
@@ -98,9 +99,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
 
       print('🔍 ChatList: Fetching received messages...');
-      QuerySnapshot receivedMessagesQuery;
+      DbQuerySnapshot receivedMessagesQuery;
       try {
-        receivedMessagesQuery = await FirebaseFirestore.instance
+        receivedMessagesQuery = await SupabaseDb.instance
             .collection('messages')
             .where('receiverId', isEqualTo: currentUser.uid)
             .get();
@@ -156,7 +157,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
 
       // Also get accepted connections (even if no messages yet)
-      final acceptedConnectionsQuery = await FirebaseFirestore.instance
+      final acceptedConnectionsQuery = await SupabaseDb.instance
           .collection('connections')
           .where('status', isEqualTo: 'accepted')
           .where(
@@ -214,14 +215,14 @@ class _ChatListScreenState extends State<ChatListScreen>
 
         try {
           // Get user data - try both normalized and original
-          DocumentSnapshot? userDoc = await FirebaseFirestore.instance
+          DbDocSnapshot? userDoc = await SupabaseDb.instance
               .collection('users')
               .doc(partnerId)
               .get();
 
           // If not found, try with normalized ID
           if (!userDoc.exists && partnerId != normalizedPartnerId) {
-            userDoc = await FirebaseFirestore.instance
+            userDoc = await SupabaseDb.instance
                 .collection('users')
                 .doc(normalizedPartnerId)
                 .get();
@@ -240,9 +241,9 @@ class _ChatListScreenState extends State<ChatListScreen>
 
           // Get last message - use two separate queries to avoid index requirement
           // Try sent messages first (without orderBy to avoid index requirement)
-          QuerySnapshot sentLastMessage;
+          DbQuerySnapshot sentLastMessage;
           try {
-            sentLastMessage = await FirebaseFirestore.instance
+            sentLastMessage = await SupabaseDb.instance
                 .collection('messages')
                 .where('senderId', isEqualTo: currentUser.uid)
                 .where('receiverId', isEqualTo: partnerId)
@@ -254,7 +255,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             print(
               '⚠️ ChatList: orderBy failed for sent messages, fetching all: $e',
             );
-            sentLastMessage = await FirebaseFirestore.instance
+            sentLastMessage = await SupabaseDb.instance
                 .collection('messages')
                 .where('senderId', isEqualTo: currentUser.uid)
                 .where('receiverId', isEqualTo: partnerId)
@@ -264,17 +265,17 @@ class _ChatListScreenState extends State<ChatListScreen>
               final aData = a.data() as Map<String, dynamic>?;
               final bData = b.data() as Map<String, dynamic>?;
               final aTime =
-                  (aData?['createdAt'] as Timestamp?) ?? Timestamp.now();
+                  parseDbDate(aData?['createdAt']) ?? DateTime.now();
               final bTime =
-                  (bData?['createdAt'] as Timestamp?) ?? Timestamp.now();
+                  parseDbDate(bData?['createdAt']) ?? DateTime.now();
               return bTime.compareTo(aTime);
             });
           }
 
           // Try received messages (without orderBy to avoid index requirement)
-          QuerySnapshot receivedLastMessage;
+          DbQuerySnapshot receivedLastMessage;
           try {
-            receivedLastMessage = await FirebaseFirestore.instance
+            receivedLastMessage = await SupabaseDb.instance
                 .collection('messages')
                 .where('senderId', isEqualTo: partnerId)
                 .where('receiverId', isEqualTo: currentUser.uid)
@@ -286,7 +287,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             print(
               '⚠️ ChatList: orderBy failed for received messages, fetching all: $e',
             );
-            receivedLastMessage = await FirebaseFirestore.instance
+            receivedLastMessage = await SupabaseDb.instance
                 .collection('messages')
                 .where('senderId', isEqualTo: partnerId)
                 .where('receiverId', isEqualTo: currentUser.uid)
@@ -296,22 +297,22 @@ class _ChatListScreenState extends State<ChatListScreen>
               final aData = a.data() as Map<String, dynamic>?;
               final bData = b.data() as Map<String, dynamic>?;
               final aTime =
-                  (aData?['createdAt'] as Timestamp?) ?? Timestamp.now();
+                  parseDbDate(aData?['createdAt']) ?? DateTime.now();
               final bTime =
-                  (bData?['createdAt'] as Timestamp?) ?? Timestamp.now();
+                  parseDbDate(bData?['createdAt']) ?? DateTime.now();
               return bTime.compareTo(aTime);
             });
           }
 
           // Get the most recent message
-          QueryDocumentSnapshot? lastMessageDoc;
-          Timestamp? lastMessageTime;
+          DbDocSnapshot? lastMessageDoc;
+          DateTime? lastMessageTime;
 
           if (sentLastMessage.docs.isNotEmpty) {
             final sentData =
                 sentLastMessage.docs.first.data() as Map<String, dynamic>?;
             if (sentData != null) {
-              final sentTime = sentData['createdAt'] as Timestamp?;
+              final sentTime = parseDbDate(sentData['createdAt']);
               if (sentTime != null) {
                 lastMessageDoc = sentLastMessage.docs.first;
                 lastMessageTime = sentTime;
@@ -323,7 +324,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             final receivedData =
                 receivedLastMessage.docs.first.data() as Map<String, dynamic>?;
             if (receivedData != null) {
-              final receivedTime = receivedData['createdAt'] as Timestamp?;
+              final receivedTime = parseDbDate(receivedData['createdAt']);
               if (receivedTime != null) {
                 if (lastMessageTime == null ||
                     receivedTime.compareTo(lastMessageTime) > 0) {
@@ -335,7 +336,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
 
           // Get unread count
-          final unreadQuery = await FirebaseFirestore.instance
+          final unreadQuery = await SupabaseDb.instance
               .collection('messages')
               .where('receiverId', isEqualTo: currentUser.uid)
               .where('senderId', isEqualTo: partnerId)
@@ -370,7 +371,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             print('   - Will display as: ${_formatTimestamp(timestampDate)}');
           } else {
             // No messages yet - get connection accepted date
-            final connectionQuery = await FirebaseFirestore.instance
+            final connectionQuery = await SupabaseDb.instance
                 .collection('connections')
                 .where('status', isEqualTo: 'accepted')
                 .where(
@@ -392,8 +393,8 @@ class _ChatListScreenState extends State<ChatListScreen>
               final connectionData =
                   connectionQuery.docs.first.data() as Map<String, dynamic>?;
               if (connectionData != null) {
-                final acceptedAt = connectionData['acceptedAt'] as Timestamp?;
-                final createdAt = connectionData['createdAt'] as Timestamp?;
+                final acceptedAt = parseDbDate(connectionData['acceptedAt']);
+                final createdAt = parseDbDate(connectionData['createdAt']);
 
                 if (acceptedAt != null) {
                   chatTimestamp = acceptedAt.toDate();
@@ -597,10 +598,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
   }
 
-  StreamSubscription<QuerySnapshot>? _connectionsSubscription;
+  StreamSubscription<DbQuerySnapshot>? _connectionsSubscription;
 
   void _setupMessagesListener() {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) return;
 
     print('🔔 ChatList: Setting up message listeners');
@@ -610,7 +611,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     _connectionsSubscription?.cancel();
 
     // Listen for sent messages
-    final sentMessagesQuery = FirebaseFirestore.instance
+    final sentMessagesQuery = SupabaseDb.instance
         .collection('messages')
         .where('senderId', isEqualTo: currentUser.uid);
 
@@ -653,7 +654,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
 
     // Also listen for received messages
-    final receivedMessagesQuery = FirebaseFirestore.instance
+    final receivedMessagesQuery = SupabaseDb.instance
         .collection('messages')
         .where('receiverId', isEqualTo: currentUser.uid);
 
@@ -697,7 +698,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     );
 
     // Also listen for connection changes (new accepted connections)
-    _connectionsSubscription = FirebaseFirestore.instance
+    _connectionsSubscription = SupabaseDb.instance
         .collection('connections')
         .where('status', isEqualTo: 'accepted')
         .where(
@@ -745,7 +746,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Future<void> _performSearch(String query) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final currentUser = SupabaseService.currentUser;
     if (currentUser == null) {
       setState(() {
         _filteredChats = [];
@@ -786,7 +787,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     // Search in Firestore for users without existing chats
     try {
       print('Searching Firestore for users...');
-      final usersSnapshot = await FirebaseFirestore.instance
+      final usersSnapshot = await SupabaseDb.instance
           .collection('users')
           .where('profileCompleted', isEqualTo: true)
           .get();
@@ -823,7 +824,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           DateTime lastMessageTime = DateTime.now();
 
           try {
-            final messagesQuery = await FirebaseFirestore.instance
+            final messagesQuery = await SupabaseDb.instance
                 .collection('messages')
                 .where(
                   Filter.or(
@@ -845,13 +846,13 @@ class _ChatListScreenState extends State<ChatListScreen>
               final msgData = messagesQuery.docs.first.data();
               lastMessage = msgData['content'] ?? 'No messages yet';
               lastMessageTime =
-                  (msgData['createdAt'] as Timestamp?)?.toDate() ??
+                  parseDbDate(msgData['createdAt']) ??
                   DateTime.now();
             }
           } catch (e) {
             // If orderBy fails, try without it
             try {
-              final messagesQuery = await FirebaseFirestore.instance
+              final messagesQuery = await SupabaseDb.instance
                   .collection('messages')
                   .where(
                     Filter.or(
@@ -872,7 +873,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                 final msgData = messagesQuery.docs.first.data();
                 lastMessage = msgData['content'] ?? 'No messages yet';
                 lastMessageTime =
-                    (msgData['createdAt'] as Timestamp?)?.toDate() ??
+                    parseDbDate(msgData['createdAt']) ??
                     DateTime.now();
               }
             } catch (e2) {
@@ -883,7 +884,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           // Get unread count
           int unreadCount = 0;
           try {
-            final unreadQuery = await FirebaseFirestore.instance
+            final unreadQuery = await SupabaseDb.instance
                 .collection('messages')
                 .where('receiverId', isEqualTo: currentUser.uid)
                 .where('senderId', isEqualTo: userId)

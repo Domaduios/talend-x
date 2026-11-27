@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PaymentMethodScreen extends StatefulWidget {
   const PaymentMethodScreen({super.key});
@@ -50,16 +51,16 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen>
 
   Future<void> _loadPaymentMethods() async {
     setState(() => _isLoading = true);
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) {
       setState(() => _isLoading = false);
       return;
     }
 
     try {
-      final paymentMethodsQuery = await FirebaseFirestore.instance
+      final paymentMethodsQuery = await SupabaseDb.instance
           .collection('paymentMethods')
-          .where('userId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.id)
           .orderBy('isDefault', descending: true)
           .get();
 
@@ -123,19 +124,19 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen>
       backgroundColor: Colors.transparent,
       builder: (context) => _AddPaymentMethodSheet(
         onAdd: (method) async {
-          final user = FirebaseAuth.instance.currentUser;
+          final user = SupabaseService.currentUser;
           if (user == null) return;
 
           try {
-            await FirebaseFirestore.instance.collection('paymentMethods').add({
-              'userId': user.uid,
+            await SupabaseDb.instance.collection('paymentMethods').add({
+              'userId': user.id,
               'type': method['type'],
               'cardNumber': method['cardNumber'],
               'cardHolder': method['cardHolder'],
               'expiryDate': method['expiryDate'],
               'brand': method['brand'],
               'isDefault': method['isDefault'] ?? false,
-              'createdAt': FieldValue.serverTimestamp(),
+              'createdAt': DbFieldValue.serverTimestamp(),
             });
 
             if (mounted) {
@@ -174,7 +175,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen>
   }
 
   Future<void> _setDefaultPayment(String id) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) return;
 
     // Capture ScaffoldMessenger before async operation
@@ -182,9 +183,9 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen>
 
     try {
       // Set all payment methods to not default
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = SupabaseDb.instance.batch();
       for (var method in _paymentMethods) {
-        final methodRef = FirebaseFirestore.instance
+        final methodRef = SupabaseDb.instance
             .collection('paymentMethods')
             .doc(method['id'] as String);
         batch.update(methodRef, {'isDefault': method['id'] == id});
@@ -247,7 +248,7 @@ class _PaymentMethodScreenState extends State<PaymentMethodScreen>
             onPressed: () async {
               Navigator.pop(context);
               try {
-                await FirebaseFirestore.instance
+                await SupabaseDb.instance
                     .collection('paymentMethods')
                     .doc(id)
                     .delete();

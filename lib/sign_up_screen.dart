@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'email_verification_pending_screen.dart';
 import 'profile_setup_screen.dart';
 import 'home_screen.dart';
@@ -93,18 +93,14 @@ class _SignUpScreenState extends State<SignUpScreen>
 
       try {
         // Create user account
-        final credential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
-              email: _emailController.text.trim(),
-              password: _passwordController.text,
-            );
-
-        // Update user display name
-        await credential.user?.updateDisplayName(_nameController.text.trim());
-        await credential.user?.reload();
-
-        // Send email verification
-        await credential.user?.sendEmailVerification();
+        await SupabaseService.auth.signUp(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          data: {
+            'name': _nameController.text.trim(),
+            if (_selectedFaculty != null) 'faculty': _selectedFaculty,
+          },
+        );
 
         // Don't save to Firestore yet - wait for email verification
         // Data will be saved after email verification in EmailVerificationPendingScreen
@@ -123,7 +119,7 @@ class _SignUpScreenState extends State<SignUpScreen>
             ),
           );
         }
-      } on FirebaseAuthException catch (e) {
+      } on AuthException catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء إنشاء الحساب';
@@ -155,100 +151,54 @@ class _SignUpScreenState extends State<SignUpScreen>
   Future<void> _signUpWithGoogle() async {
     try {
       setState(() => _isLoading = true);
-
-      // Sign out first to allow account selection every time
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-      try {
-        await googleSignIn.signOut();
-      } catch (e) {
-        // Ignore sign out errors
-      }
-
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      if (googleUser == null) {
-        // User canceled the sign-in
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+      final ok = await SupabaseService.signInWithGoogle();
+      if (!ok) {
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Check if we have valid tokens
-      // Note: idToken might be null in some cases, but accessToken should be available
-      if (googleAuth.accessToken == null) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('فشل الحصول على بيانات المصادقة من Google'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Create a new credential
-      // Use idToken if available, otherwise use accessToken
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
-
-      // Save user data to Firestore (if new user)
-      if (userCredential.user != null &&
-          userCredential.additionalUserInfo?.isNewUser == true) {
-        // Check if this is an admin email
-        final email = userCredential.user!.email ?? '';
+      final signedInUser = SupabaseService.currentUser;
+      if (signedInUser != null) {
+        final existing = await SupabaseDb.instance.collection('users').doc(signedInUser.id).get();
+        if (!existing.exists) {
+          final email = signedInUser.email ?? '';
         final isAdminEmail = email.toLowerCase() == 'domaduios@gmail.com';
 
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('users')
-            .doc(userCredential.user!.uid)
+            .doc(signedInUser.id)
             .set({
               'email': email,
-              'name': userCredential.user!.displayName ?? '',
+              'name': signedInUser.userMetadata?['name'] as String? ?? '',
               'faculty': null, // User can update later
               'profileCompleted': false,
               'isAdmin': isAdminEmail,
               'role': isAdminEmail ? 'admin' : 'user',
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
+              'createdAt': DbFieldValue.serverTimestamp(),
+              'updatedAt': DbFieldValue.serverTimestamp(),
             });
+        }
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
 
         // Navigate to Profile Setup if new user
-        if (userCredential.additionalUserInfo?.isNewUser == true) {
+        if (signedInUser != null && !(await SupabaseDb.instance.collection('users').doc(signedInUser.id).get()).exists) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => ProfileSetupScreen(
-                userName: userCredential.user?.displayName,
-                userEmail: userCredential.user?.email,
+                userName: signedInUser.userMetadata?['name'] as String?,
+                userEmail: signedInUser.email,
                 userFaculty: null,
               ),
             ),
           );
         } else {
-          // Existing user - check profile completion
-          final currentUser = userCredential.user;
+          final currentUser = signedInUser;
           if (currentUser != null) {
             try {
-              final userDoc = await FirebaseFirestore.instance
+              final userDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(currentUser.uid)
                   .get();
@@ -263,7 +213,7 @@ class _SignUpScreenState extends State<SignUpScreen>
                     context,
                     MaterialPageRoute(
                       builder: (context) => ProfileSetupScreen(
-                        userName: userData?['name'] ?? currentUser.displayName,
+                        userName: userData?['name'] ?? currentUser.userMetadata?['name'] as String?,
                         userEmail: userData?['email'] ?? currentUser.email,
                         userFaculty: userData?['faculty'],
                       ),
@@ -282,24 +232,24 @@ class _SignUpScreenState extends State<SignUpScreen>
                 final isAdminEmail =
                     email.toLowerCase() == 'domaduios@gmail.com';
 
-                await FirebaseFirestore.instance
+                await SupabaseDb.instance
                     .collection('users')
                     .doc(currentUser.uid)
                     .set({
                       'email': email,
-                      'name': currentUser.displayName ?? '',
+                      'name': currentUser.userMetadata?['name'] as String? ?? '',
                       'profileCompleted': false,
                       'isAdmin': isAdminEmail,
                       'role': isAdminEmail ? 'admin' : 'user',
-                      'createdAt': FieldValue.serverTimestamp(),
-                      'updatedAt': FieldValue.serverTimestamp(),
+                      'createdAt': DbFieldValue.serverTimestamp(),
+                      'updatedAt': DbFieldValue.serverTimestamp(),
                     });
 
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
                     builder: (context) => ProfileSetupScreen(
-                      userName: currentUser.displayName,
+                      userName: currentUser.userMetadata?['name'] as String?,
                       userEmail: currentUser.email,
                       userFaculty: null,
                     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
 
 class AchievementsScreen extends StatefulWidget {
@@ -56,11 +57,11 @@ class _AchievementsScreenState extends State<AchievementsScreen>
 
   Future<void> _loadAchievements() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       // Load user's sessions
-      final sessionsSnapshot = await FirebaseFirestore.instance
+      final sessionsSnapshot = await SupabaseDb.instance
           .collection('sessions')
           .where('participants', arrayContains: currentUser.uid)
           .where('status', isEqualTo: 'completed')
@@ -69,7 +70,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
       final completedSessions = sessionsSnapshot.docs.length;
 
       // Load connections
-      final connectionsSnapshot = await FirebaseFirestore.instance
+      final connectionsSnapshot = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: currentUser.uid)
           .where('status', isEqualTo: 'accepted')
@@ -78,7 +79,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
       final connectionsCount = connectionsSnapshot.docs.length;
 
       // Load reviews
-      final reviewsSnapshot = await FirebaseFirestore.instance
+      final reviewsSnapshot = await SupabaseDb.instance
           .collection('reviews')
           .where('revieweeId', isEqualTo: currentUser.uid)
           .get();
@@ -96,7 +97,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
       }
 
       // Load learning skills
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await SupabaseDb.instance
           .collection('users')
           .doc(currentUser.uid)
           .get();

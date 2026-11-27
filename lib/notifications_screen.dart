@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 import 'dart:math' as math;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'utils/app_localizations.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -69,7 +70,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Future<void> _loadNotifications() async {
     setState(() => _isLoading = true);
-    final user = FirebaseAuth.instance.currentUser;
+    final user = SupabaseService.currentUser;
     if (user == null) {
       setState(() {
         _isLoading = false;
@@ -79,9 +80,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     }
 
     try {
-      final notificationsQuery = await FirebaseFirestore.instance
+      final notificationsQuery = await SupabaseDb.instance
           .collection('notifications')
-          .where('userId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.id)
           .orderBy('timestamp', descending: true)
           .limit(100)
           .get();
@@ -95,7 +96,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         final message = data['message'] ?? '';
         final isRead = data['isRead'] ?? false;
         final timestamp =
-            (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+            parseDbDate(data['createdAt']) ?? DateTime.now();
 
         // Get icon and color based on type
         IconData icon;
@@ -108,7 +109,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             icon = Icons.person_add;
             color = Colors.blue;
             if (data['fromUserId'] != null) {
-              final fromUserDoc = await FirebaseFirestore.instance
+              final fromUserDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(data['fromUserId'] as String)
                   .get();
@@ -123,7 +124,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             icon = Icons.calendar_today;
             color = Colors.orange;
             if (data['sessionId'] != null) {
-              final sessionDoc = await FirebaseFirestore.instance
+              final sessionDoc = await SupabaseDb.instance
                   .collection('sessions')
                   .doc(data['sessionId'])
                   .get();
@@ -132,9 +133,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 if (sessionData != null) {
                   final teacherId = sessionData['teacherId'] as String?;
                   final learnerId = sessionData['learnerId'] as String?;
-                  final partnerId = teacherId == user.uid ? learnerId : teacherId;
+                  final partnerId = teacherId == user.id ? learnerId : teacherId;
                   if (partnerId != null && partnerId.isNotEmpty) {
-                    final partnerDoc = await FirebaseFirestore.instance
+                    final partnerDoc = await SupabaseDb.instance
                         .collection('users')
                         .doc(partnerId)
                         .get();
@@ -152,7 +153,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             icon = Icons.message;
             color = Colors.green;
             if (data['fromUserId'] != null) {
-              final fromUserDoc = await FirebaseFirestore.instance
+              final fromUserDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(data['fromUserId'] as String)
                   .get();
@@ -167,7 +168,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             icon = Icons.star;
             color = Colors.amber;
             if (data['fromUserId'] != null) {
-              final fromUserDoc = await FirebaseFirestore.instance
+              final fromUserDoc = await SupabaseDb.instance
                   .collection('users')
                   .doc(data['fromUserId'] as String)
                   .get();
@@ -285,14 +286,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   Future<void> _acceptConnection(Map<String, dynamic> notification) async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = SupabaseService.currentUser;
       if (currentUser == null) return;
 
       final fromUserId = notification['fromUserId'] as String?;
       if (fromUserId == null) return;
 
       // Find and update the connection request
-      final requestQuery = await FirebaseFirestore.instance
+      final requestQuery = await SupabaseDb.instance
           .collection('connections')
           .where('userId', isEqualTo: fromUserId)
           .where('connectedUserId', isEqualTo: currentUser.uid)
@@ -301,12 +302,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           .get();
 
       if (requestQuery.docs.isNotEmpty) {
-        await FirebaseFirestore.instance
+        await SupabaseDb.instance
             .collection('connections')
             .doc(requestQuery.docs.first.id)
             .update({
               'status': 'accepted',
-              'acceptedAt': FieldValue.serverTimestamp(),
+              'acceptedAt': DbFieldValue.serverTimestamp(),
             });
 
         // Reload notifications to reflect the change
