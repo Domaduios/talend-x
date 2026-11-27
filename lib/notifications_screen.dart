@@ -83,7 +83,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       final notificationsQuery = await SupabaseDb.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.id)
-          .orderBy('timestamp', descending: true)
+          .orderBy('createdAt', descending: true)
           .limit(100)
           .get();
 
@@ -93,8 +93,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         final data = doc.data();
         final type = data['type'] ?? 'system';
         final title = data['title'] ?? '';
-        final message = data['message'] ?? '';
-        final isRead = data['isRead'] ?? false;
+        final message = data['body'] ?? data['message'] ?? '';
+        final isRead = data['read'] ?? data['isRead'] ?? false;
         final timestamp =
             parseDbDate(data['createdAt']) ?? DateTime.now();
 

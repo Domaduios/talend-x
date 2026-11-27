@@ -270,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Get recent notifications
       final notificationsQuery = await SupabaseDb.instance
           .collection('notifications')
-          .where('receiverId', isEqualTo: user.id)
+          .where('userId', isEqualTo: user.id)
           .orderBy('createdAt', descending: true)
           .limit(3)
           .get();

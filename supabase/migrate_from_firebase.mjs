@@ -53,16 +53,35 @@ for (const fu of backup.authUsers) {
       continue;
     }
     sbUser = data.user;
+    byEmail.set(key, sbUser);
   }
   uidMap.set(fu.uid, sbUser.id);
 }
 console.log('Mapped Auth users:', uidMap.size);
 
-// 2. Migrate public.users profiles
+// Build legacy UID fallback map (for superseded Firestore user docs whose email matches an active Auth user)
+const legacyUidMap = new Map(uidMap);
+for (const doc of backup.collections.users || []) {
+  if (!legacyUidMap.has(doc.id) && doc.email) {
+    const sbUser = byEmail.get(doc.email.toLowerCase());
+    if (sbUser) {
+      legacyUidMap.set(doc.id, sbUser.id);
+    }
+  }
+}
+
+// 2. Migrate public.users profiles (only active Auth UIDs; legacy duplicates & deleted-Auth orphans are skipped)
 let userCount = 0;
+let userSkippedLegacy = 0;
+let userSkippedOrphan = 0;
+let userFailed = 0;
 for (const doc of backup.collections.users || []) {
   const sbId = uidMap.get(doc.id);
-  if (!sbId) continue;
+  if (!sbId) {
+    if (legacyUidMap.has(doc.id)) userSkippedLegacy++;
+    else userSkippedOrphan++;
+    continue;
+  }
   const { error } = await supabase.from('users').upsert({
     id: sbId,
     firebase_uid: doc.id,
@@ -81,33 +100,80 @@ for (const doc of backup.collections.users || []) {
     learn_skills: Array.isArray(doc.learnSkills) ? doc.learnSkills : [],
     recent_searches: Array.isArray(doc.recentSearches) ? doc.recentSearches : [],
   });
-  if (!error) userCount++;
+  if (error) userFailed++;
+  else userCount++;
 }
-console.log('Migrated user profiles:', userCount);
+console.log('Migrated user profiles:', { source: (backup.collections.users || []).length, imported: userCount, skippedLegacyDup: userSkippedLegacy, skippedOrphanNoAuth: userSkippedOrphan, failed: userFailed });
 
-// 3. Migrate favorites
+// 3. Migrate favorites (using legacyUidMap so superseded UIDs resolve to active Supabase UUIDs)
 let favCount = 0;
+let favSkipped = 0;
+let favFailed = 0;
 for (const doc of backup.collections.favorites || []) {
-  const uId = uidMap.get(doc.userId);
-  const fId = uidMap.get(doc.favoriteUserId);
-  if (!uId || !fId) continue;
-  const { error } = await supabase.from('favorites').upsert({ user_id: uId, favorite_user_id: fId });
-  if (!error) favCount++;
+  const uId = legacyUidMap.get(doc.userId);
+  const fId = legacyUidMap.get(doc.favoriteUserId);
+  if (!uId || !fId) {
+    favSkipped++;
+    continue;
+  }
+  const { error } = await supabase
+    .from('favorites')
+    .upsert({ user_id: uId, favorite_user_id: fId }, { onConflict: 'user_id,favorite_user_id' });
+  if (error) {
+    console.error('Favorite error:', error.message);
+    favFailed++;
+  } else {
+    favCount++;
+  }
 }
-console.log('Migrated favorites:', favCount);
+console.log('Migrated favorites:', { source: (backup.collections.favorites || []).length, imported: favCount, skipped: favSkipped, failed: favFailed });
 
-// 4. Migrate messages
-let msgCount = 0;
+// 4. Migrate messages idempotently (preserving created_at, resolving legacy UIDs by email)
+let msgInserted = 0;
+let msgAlreadyPresent = 0;
+let msgSkipped = 0;
+let msgFailed = 0;
+
+const { data: existingMsgs } = await supabase.from('messages').select('id, sender_id, receiver_id, content');
+const existingMsgKeys = new Set(
+  (existingMsgs || []).map((m) => `${m.sender_id}|${m.receiver_id}|${m.content}`)
+);
+
 for (const doc of backup.collections.messages || []) {
-  const sId = uidMap.get(doc.senderId);
-  const rId = uidMap.get(doc.receiverId);
-  if (!sId || !rId || !doc.content) continue;
+  const sId = legacyUidMap.get(doc.senderId);
+  const rId = legacyUidMap.get(doc.receiverId);
+  if (!sId || !rId || !doc.content) {
+    msgSkipped++;
+    continue;
+  }
+  const key = `${sId}|${rId}|${doc.content}`;
+  if (existingMsgKeys.has(key)) {
+    msgAlreadyPresent++;
+    continue;
+  }
+  const createdAt = doc.createdAt?._seconds
+    ? new Date(doc.createdAt._seconds * 1000).toISOString()
+    : new Date().toISOString();
   const { error } = await supabase.from('messages').insert({
     sender_id: sId,
     receiver_id: rId,
     content: doc.content,
     read: Boolean(doc.read),
+    created_at: createdAt,
   });
-  if (!error) msgCount++;
+  if (error) {
+    console.error('Message error:', doc.id, error.message);
+    msgFailed++;
+  } else {
+    existingMsgKeys.add(key);
+    msgInserted++;
+  }
 }
-console.log('Migrated messages:', msgCount);
+console.log('Migrated messages:', {
+  source: (backup.collections.messages || []).length,
+  newlyInserted: msgInserted,
+  alreadyPresent: msgAlreadyPresent,
+  totalInSupabase: msgInserted + msgAlreadyPresent,
+  skippedNoAuthUser: msgSkipped,
+  failed: msgFailed,
+});
