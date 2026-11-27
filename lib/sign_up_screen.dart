@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/supabase_service.dart';
@@ -93,14 +94,44 @@ class _SignUpScreenState extends State<SignUpScreen>
 
       try {
         // Create user account
-        await SupabaseService.auth.signUp(
+        final res = await SupabaseService.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          emailRedirectTo: kIsWeb ? Uri.base.origin : 'com.iu.talendx://login-callback',
           data: {
             'name': _nameController.text.trim(),
             if (_selectedFaculty != null) 'faculty': _selectedFaculty,
           },
         );
+        if (res.session != null && res.user != null) {
+          final email = res.user!.email ?? _emailController.text.trim();
+          final isAdminEmail = email.toLowerCase() == 'domaduios@gmail.com';
+          await SupabaseDb.instance.collection('users').doc(res.user!.id).set({
+            'email': email,
+            'name': _nameController.text.trim(),
+            'faculty': _selectedFaculty,
+            'emailVerified': true,
+            'profileCompleted': false,
+            'isAdmin': isAdminEmail,
+            'role': isAdminEmail ? 'admin' : 'user',
+            'createdAt': DbFieldValue.serverTimestamp(),
+            'updatedAt': DbFieldValue.serverTimestamp(),
+          });
+          if (mounted) {
+            setState(() => _isLoading = false);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProfileSetupScreen(
+                  userName: _nameController.text.trim(),
+                  userEmail: email,
+                  userFaculty: _selectedFaculty,
+                ),
+              ),
+            );
+          }
+          return;
+        }
 
         // Don't save to Firestore yet - wait for email verification
         // Data will be saved after email verification in EmailVerificationPendingScreen
@@ -123,12 +154,17 @@ class _SignUpScreenState extends State<SignUpScreen>
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء إنشاء الحساب';
-          if (e.code == 'weak-password') {
+          final msg = e.message.toLowerCase();
+          if (e.code == 'weak_password' || e.code == 'weak-password') {
             errorMessage = 'كلمة المرور ضعيفة جداً';
-          } else if (e.code == 'email-already-in-use') {
+          } else if (e.code == 'user_already_exists' || e.code == 'email-already-in-use' || msg.contains('already registered')) {
             errorMessage = 'البريد الإلكتروني مستخدم بالفعل';
-          } else if (e.code == 'invalid-email') {
+          } else if (e.code == 'over_email_send_rate_limit') {
+            errorMessage = 'تم إرسال رسائل كثيرة جداً. يرجى المحاولة لاحقاً.';
+          } else if (e.code == 'validation_failed' || e.code == 'invalid-email') {
             errorMessage = 'البريد الإلكتروني غير صحيح';
+          } else if (e.message.isNotEmpty) {
+            errorMessage = 'خطأ: ${e.message}';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),

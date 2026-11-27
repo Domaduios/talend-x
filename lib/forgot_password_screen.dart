@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/supabase_service.dart';
@@ -71,7 +72,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       setState(() => _isLoading = true);
 
       try {
-        await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim());
+        await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim(), redirectTo: kIsWeb ? Uri.base.origin : 'com.iu.talendx://login-callback');
 
         if (mounted) {
           setState(() {
@@ -85,12 +86,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء إرسال الرابط';
-          if (e.code == 'user-not-found') {
-            errorMessage = 'البريد الإلكتروني غير مسجل';
-          } else if (e.code == 'invalid-email') {
-            errorMessage = 'البريد الإلكتروني غير صحيح';
-          } else if (e.code == 'too-many-requests') {
+          if (e.code == 'over_email_send_rate_limit' || e.code == 'too-many-requests') {
             errorMessage = 'تم إرسال العديد من الطلبات. يرجى المحاولة لاحقاً';
+          } else if (e.code == 'validation_failed' || e.code == 'invalid-email') {
+            errorMessage = 'البريد الإلكتروني غير صحيح';
+          } else if (e.message.isNotEmpty) {
+            errorMessage = e.message;
           }
           _showErrorSnackBar(errorMessage);
         }
@@ -113,7 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     });
 
     try {
-      await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim());
+      await SupabaseService.auth.resetPasswordForEmail(_emailController.text.trim(), redirectTo: kIsWeb ? Uri.base.origin : 'com.iu.talendx://login-callback');
 
       if (mounted) {
         setState(() => _isLoading = false);

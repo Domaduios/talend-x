@@ -89,10 +89,7 @@ class _SignInScreenState extends State<SignInScreen>
                 );
               } else {
                 // Profile completed - Navigate to Home
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                );
+                Navigator.pushReplacementNamed(context, '/home');
               }
             } catch (e) {
               if (mounted) {
@@ -111,12 +108,18 @@ class _SignInScreenState extends State<SignInScreen>
         if (mounted) {
           setState(() => _isLoading = false);
           String errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
-          if (e.code == 'user-not-found') {
-            errorMessage = 'البريد الإلكتروني غير مسجل';
-          } else if (e.code == 'wrong-password') {
-            errorMessage = 'كلمة المرور غير صحيحة';
-          } else if (e.code == 'invalid-email') {
+          final msg = e.message.toLowerCase();
+          if (e.code == 'invalid_credentials' || msg.contains('invalid login credentials')) {
+            errorMessage =
+                'البريد الإلكتروني أو كلمة المرور غير صحيحة. إذا كنت من مستخدمي Firebase السابقين، اضغط «نسيت كلمة المرور» لتعيين كلمة مرور جديدة.';
+          } else if (e.code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
+            errorMessage = 'يرجى تأكيد بريدك الإلكتروني أولاً عبر الرابط المرسل إليك.';
+          } else if (e.code == 'over_request_rate_limit' || e.code == 'too_many_requests') {
+            errorMessage = 'تم إرسال محاولات كثيرة جداً. يرجى المحاولة بعد قليل.';
+          } else if (e.code == 'validation_failed' || e.code == 'invalid_email') {
             errorMessage = 'البريد الإلكتروني غير صحيح';
+          } else if (e.message.isNotEmpty) {
+            errorMessage = 'خطأ في تسجيل الدخول: ${e.message}';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
@@ -247,10 +250,7 @@ class _SignInScreenState extends State<SignInScreen>
             } else {
               // Profile completed - Navigate to Home
               if (mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HomeScreen()),
-                );
+                Navigator.pushReplacementNamed(context, '/home');
               }
             }
           } on PostgrestException catch (e) {

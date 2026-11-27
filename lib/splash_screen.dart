@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/supabase_service.dart';
 import 'services/supabase_db.dart';
+import 'profile_setup_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -87,6 +88,34 @@ class _SplashScreenState extends State<SplashScreen>
           Navigator.pushReplacementNamed(context, '/home');
           return;
         }
+        final u = SupabaseService.currentUser!;
+        if (!profile.exists) {
+          final email = u.email ?? '';
+          final isAdminEmail = email.toLowerCase() == 'domaduios@gmail.com';
+          await SupabaseDb.instance.collection('users').doc(u.id).set({
+            'email': email,
+            'name': (u.userMetadata?['name'] as String?) ?? '',
+            'faculty': u.userMetadata?['faculty'],
+            'emailVerified': u.emailConfirmedAt != null,
+            'profileCompleted': false,
+            'isAdmin': isAdminEmail,
+            'role': isAdminEmail ? 'admin' : 'user',
+            'createdAt': DbFieldValue.serverTimestamp(),
+            'updatedAt': DbFieldValue.serverTimestamp(),
+          });
+        }
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfileSetupScreen(
+              userName: (profile.data()['name'] as String?) ?? (u.userMetadata?['name'] as String?),
+              userEmail: u.email,
+              userFaculty: (profile.data()['faculty'] as String?) ?? (u.userMetadata?['faculty'] as String?),
+            ),
+          ),
+        );
+        return;
       }
 
       if (isFirstTime) {
