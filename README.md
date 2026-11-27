@@ -37,3 +37,10 @@ flutter run
 - **Release Page:** https://github.com/Domaduios/talend-x/releases/tag/v1.0.0
 - **Direct APK:** https://github.com/Domaduios/talend-x/releases/download/v1.0.0/talend-x-v1.0.0.apk
 
+
+## Flutter Web Demo
+
+- **Web Demo:** https://talend-x-web.vercel.app
+
+![Flutter Web Demo](docs/screenshots/05-web-demo.png)
+

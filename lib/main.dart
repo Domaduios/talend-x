@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,29 @@ import 'app_icon_generator_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    runApp(const MyApp());
+    const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
+    const appId = String.fromEnvironment('FIREBASE_APP_ID');
+    const senderId = String.fromEnvironment('FIREBASE_SENDER_ID');
+    const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
+    if (apiKey.isNotEmpty && projectId.isNotEmpty) {
+      Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: apiKey,
+          appId: appId,
+          messagingSenderId: senderId,
+          projectId: projectId,
+          authDomain: '$projectId.firebaseapp.com',
+          storageBucket: '$projectId.firebasestorage.app',
+        ),
+      ).catchError((e) {
+        debugPrint('Firebase web init warning: $e');
+        return Firebase.app();
+      });
+    }
+    return;
+  }
   await Firebase.initializeApp();
   runApp(const MyApp());
 }
