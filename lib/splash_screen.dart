@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/supabase_service.dart';
+import 'services/supabase_db.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -74,6 +76,18 @@ class _SplashScreenState extends State<SplashScreen>
       print('Is First Time: $isFirstTime'); // Debug
 
       if (!mounted) return;
+
+      if (SupabaseService.currentUser != null) {
+        final profile = await SupabaseDb.instance
+            .collection('users')
+            .doc(SupabaseService.currentUser!.id)
+            .get();
+        if (!mounted) return;
+        if (profile.exists && profile.data()['profileCompleted'] == true) {
+          Navigator.pushReplacementNamed(context, '/home');
+          return;
+        }
+      }
 
       if (isFirstTime) {
         // Mark as not first time
