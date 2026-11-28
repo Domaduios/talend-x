@@ -522,6 +522,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: IconButton(
+                  tooltip: 'Settings',
                   onPressed: _openSettings,
                   icon: const Icon(Icons.settings, color: Colors.white),
                 ),

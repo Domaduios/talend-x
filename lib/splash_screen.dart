@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/supabase_service.dart';
 import 'services/supabase_db.dart';
 import 'profile_setup_screen.dart';
+import 'reset_password_confirm_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -79,6 +80,15 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
 
       if (SupabaseService.currentUser != null) {
+        if (SupabaseService.pendingPasswordRecovery) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ResetPasswordConfirmScreen(),
+            ),
+          );
+          return;
+        }
         final profile = await SupabaseDb.instance
             .collection('users')
             .doc(SupabaseService.currentUser!.id)

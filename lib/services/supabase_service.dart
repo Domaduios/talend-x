@@ -13,13 +13,24 @@ class SupabaseService {
   );
 
   static bool _initialized = false;
+  static bool pendingPasswordRecovery = false;
 
   static Future<void> initialize() async {
     if (_initialized) return;
+    if (kIsWeb &&
+        (Uri.base.fragment.contains('type=recovery') ||
+            Uri.base.queryParameters['type'] == 'recovery')) {
+      pendingPasswordRecovery = true;
+    }
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
     );
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        pendingPasswordRecovery = true;
+      }
+    });
     _initialized = true;
   }
 

@@ -107,19 +107,31 @@ class _SignInScreenState extends State<SignInScreen>
       } on AuthException catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
-          String errorMessage = 'حدث خطأ أثناء تسجيل الدخول';
+          final isAr = context.l10n.languageCode == 'ar';
+          String errorMessage = isAr
+              ? 'حدث خطأ أثناء تسجيل الدخول'
+              : 'An error occurred during sign in';
           final msg = e.message.toLowerCase();
           if (e.code == 'invalid_credentials' || msg.contains('invalid login credentials')) {
-            errorMessage =
-                'البريد الإلكتروني أو كلمة المرور غير صحيحة. إذا كنت من مستخدمي Firebase السابقين، اضغط «نسيت كلمة المرور» لتعيين كلمة مرور جديدة.';
+            errorMessage = isAr
+                ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة. إذا كنت من مستخدمي Firebase السابقين، اضغط «نسيت كلمة المرور» لتعيين كلمة مرور جديدة.'
+                : 'Invalid email or password. If you migrated from Firebase, tap "Forgot Password?" to set a new password.';
           } else if (e.code == 'email_not_confirmed' || msg.contains('email not confirmed')) {
-            errorMessage = 'يرجى تأكيد بريدك الإلكتروني أولاً عبر الرابط المرسل إليك.';
+            errorMessage = isAr
+                ? 'يرجى تأكيد بريدك الإلكتروني أولاً عبر الرابط المرسل إليك.'
+                : 'Please verify your email first using the link sent to your inbox.';
           } else if (e.code == 'over_request_rate_limit' || e.code == 'too_many_requests') {
-            errorMessage = 'تم إرسال محاولات كثيرة جداً. يرجى المحاولة بعد قليل.';
+            errorMessage = isAr
+                ? 'تم إرسال محاولات كثيرة جداً. يرجى المحاولة بعد قليل.'
+                : 'Too many requests. Please try again shortly.';
           } else if (e.code == 'validation_failed' || e.code == 'invalid_email') {
-            errorMessage = 'البريد الإلكتروني غير صحيح';
+            errorMessage = isAr
+                ? 'البريد الإلكتروني غير صحيح'
+                : 'Invalid email address';
           } else if (e.message.isNotEmpty) {
-            errorMessage = 'خطأ في تسجيل الدخول: ${e.message}';
+            errorMessage = isAr
+                ? 'خطأ في تسجيل الدخول: ${e.message}'
+                : 'Sign in error: ${e.message}';
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
