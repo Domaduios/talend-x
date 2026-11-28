@@ -129,7 +129,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               _phoneController.text = userData['phone'] as String? ?? '';
               _bioController.text = userData['bio'] as String? ?? '';
               _selectedFaculty = userData['faculty'] as String? ?? '';
-              _selectedAvailability = userData['availability'] as String? ?? 'Available';
+              final rawAvail = userData['availability'];
+              _selectedAvailability = rawAvail is String && _availabilityOptions.contains(rawAvail) ? rawAvail : (rawAvail is Map && rawAvail['status'] is String && _availabilityOptions.contains(rawAvail['status'])) ? rawAvail['status'] as String : 'Available';
               _selectedPreference =
                   userData['preference'] as String? ?? 'Hybrid (Online + In-Person)';
               _selectedTeachSkills = List<String>.from(
@@ -231,7 +232,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               : null,
           'bio': _bioController.text.trim(),
           'faculty': _selectedFaculty,
-          'availability': _selectedAvailability ?? 'Available',
+          'availability': {'status': _selectedAvailability ?? 'Available'},
           'preference': _selectedPreference ?? 'Hybrid (Online + In-Person)',
           'teachSkills': _selectedTeachSkills,
           'learnSkills': _selectedLearnSkills,

@@ -1,0 +1,8 @@
+project_id = "cdukpuhcaxblngodzgav"
+
+[auth]
+site_url = "https://talend-x-web.vercel.app"
+additional_redirect_urls = [
+  "https://talend-x-web.vercel.app/**",
+  "com.iu.talendx://login-callback",
+]

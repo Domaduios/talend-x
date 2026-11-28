@@ -150,7 +150,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           // Get average rating from reviews
           final reviewsQuery = await SupabaseDb.instance
               .collection('reviews')
-              .where('reviewedUserId', isEqualTo: user.id)
+              .where('revieweeId', isEqualTo: user.id)
               .limit(100)
               .get();
           
@@ -170,8 +170,13 @@ class _MyProfileScreenState extends State<MyProfileScreen>
           // Get total connections
           final connectionsQuery = await SupabaseDb.instance
               .collection('connections')
-              .where('userId', isEqualTo: user.id)
-              .where('status', isEqualTo: 'accepted')
+              .where(Filter.and(
+                Filter('status', isEqualTo: 'accepted'),
+                Filter.or(
+                  Filter('requesterId', isEqualTo: user.id),
+                  Filter('recipientId', isEqualTo: user.id),
+                ),
+              ))
               .limit(100)
               .get();
           
@@ -231,7 +236,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
               'sessionsCompleted': totalSessions,
               'totalConnections': totalConnections,
               'responseTime': userData['responseTime'] ?? '< 1 hour',
-              'availability': userData['availability'] ?? 'Available',
+              'availability': (userData['availability'] is String && (userData['availability'] as String).isNotEmpty) ? userData['availability'] : ((userData['availability'] is Map && (userData['availability'] as Map)['status'] is String) ? (userData['availability'] as Map)['status'] : 'Available'),
               'experience': experienceText,
               'joinedDate': joinedDate,
             };
@@ -1014,7 +1019,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _myData!['availability'] ?? 'Available',
+                        (_myData!['availability'] is String && (_myData!['availability'] as String).isNotEmpty) ? _myData!['availability'] as String : ((_myData!['availability'] is Map && (_myData!['availability'] as Map)['status'] is String) ? (_myData!['availability'] as Map)['status'] as String : 'Available'),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1023,7 +1028,7 @@ class _MyProfileScreenState extends State<MyProfileScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Response time: ${_myData!['responseTime']}',
+                        'Response time: ${_myData!['responseTime'] ?? 'Within a few hours'}',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade700,
@@ -1695,14 +1700,12 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           ElevatedButton(
             onPressed: () async {
+              final nav = Navigator.of(context, rootNavigator: true);
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
-              // Logout logic and navigate to sign in
               await SupabaseService.auth.signOut();
-              if (context.mounted) {
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil('/signin', (route) => false);
-                ScaffoldMessenger.of(context).showSnackBar(
+              nav.pushNamedAndRemoveUntil('/signin', (route) => false);
+              messenger.showSnackBar(
                   SnackBar(
                     content: Row(
                       children: const [
@@ -1719,7 +1722,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                     margin: const EdgeInsets.all(10),
                   ),
                 );
-              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,

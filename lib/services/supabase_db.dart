@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_service.dart';
 
@@ -294,7 +295,8 @@ class DbDocRef {
         .eq('id', id)
         .map((rows) => rows.isEmpty
             ? DbDocSnapshot(id, null, table)
-            : DbDocSnapshot(id, SupabaseDb.fromPgRow(rows.first), table));
+            : DbDocSnapshot(id, SupabaseDb.fromPgRow(rows.first), table))
+        .transform(StreamTransformer.fromHandlers(handleError: (_, __, ___) {}));
   }
 }
 
@@ -427,7 +429,7 @@ class DbQuery {
         docs = docs.take(_limit).toList();
       }
       return DbQuerySnapshot(docs);
-    });
+    }).transform(StreamTransformer.fromHandlers(handleError: (_, __, ___) {}));
   }
 }
 
